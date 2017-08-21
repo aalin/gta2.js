@@ -1,0 +1,28 @@
+{
+  "name": "gta2",
+  "version": "1.0.0",
+  "description": "",
+  "main": "webpack.config.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "node_modules/.bin/webpack --config webpack.config.js --color --progress",
+    "watch": "npm run build -- --watch",
+    "prettier": "node_modules/.bin/prettier --single-quote --trailing-comma es5 --write src/**/*.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.15.4",
+    "raw-loader": "^0.5.1"
+  },
+  "devDependencies": {
+    "file-loader": "^0.11.2",
+    "gl-matrix": "^2.4.0",
+    "poly-decomp": "^0.2.1",
+    "prettier": "^1.5.3",
+    "uint8array-loader": "^1.0.2",
+    "url-loader": "^0.5.9",
+    "webpack": "^3.5.5",
+    "webpack-glsl-loader": "^1.0.1"
+  }
+}
