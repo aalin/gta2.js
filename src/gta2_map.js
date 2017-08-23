@@ -186,7 +186,7 @@ function* loadParts(attributes) {
       let part = loadPart(colData, attributes, y);
 
       if (part.length) {
-        yield { progress: y, max: 256, part };
+        yield { progress: y, max: 256, result: part };
       }
   }
 }
@@ -278,7 +278,7 @@ GTA2Map.load = function* load(filename) {
   const parts = [];
 
   for (let part of loadParts(attributes)) {
-    parts.push(part);
+    parts.push(part.result);
     yield { progress: part.progress, max: part.max, text: 'Loading level' };
   }
 

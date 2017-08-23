@@ -42,16 +42,17 @@ function generateNoise(size) {
 export
 function download(path, onProgress = null) {
   return new Promise((resolve) => {
-    const oReq = new XMLHttpRequest();
-    oReq.open('GET', path, true);
-    oReq.responseType = 'arraybuffer';
+    const req = new XMLHttpRequest();
+
+    req.open('GET', path, true);
+    req.responseType = 'arraybuffer';
 
     if (onProgress) {
-      oReq.onprogress = onProgress;
+      req.onprogress = onProgress;
     }
 
-    oReq.onload = function (oEvent) {
-      var arrayBuffer = oReq.response;
+    req.onload = () => {
+      var arrayBuffer = req.response;
 
       if (arrayBuffer) {
         resolve(new Uint8Array(arrayBuffer))
@@ -60,7 +61,7 @@ function download(path, onProgress = null) {
       }
     };
 
-    oReq.send(null);
+    req.send(null);
   });
 }
 
@@ -117,9 +118,7 @@ function* downloadAsset(url) {
     max = e.total;
   }
 
-  download(url, onProgress).then((file) => {
-    data = file;
-  });
+  download(url, onProgress).then(file => data = file);
 
   while (data === null) {
     yield { progress, max };

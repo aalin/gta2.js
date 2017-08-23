@@ -2,12 +2,20 @@ import Texture from './texture';
 import { downloadAsset } from './utils';
 import loadChunks from './load_chunks';
 
+function result(buffer, result) {
+  return {
+    progress: buffer.pos,
+    max: buffer.length,
+    result
+  };
+}
+
 function* parseStyle(data) {
   for (let chunk of loadChunks(data, 'GBST', 700)) {
     console.log('chunk', chunk);
-    const type = chunk.type;
-    const size = chunk.size;
-    const buffer = chunk.buffer;
+    const { type, size, buffer } = chunk;
+
+    yield { _type: type, _progress: buffer.pos, _max: buffer.length };
 
     switch (type) {
       case 'PALX': // Palette index
@@ -61,11 +69,14 @@ GTA2Style.load = function* load(filename) {
 
   const style = {};
 
-  for (let x of parseStyle(data)) {
-    Object.assign(style, x);
-    yield { progress: 50, max: 100, text: 'Parsing style' };
+  for (let details of parseStyle(data)) {
+    if (details._progress) {
+      yield { progress: details._progress, max: details._max, text: `Parsing style (${details._type})` };
+    } else {
+      Object.assign(style, details);
+    }
   }
 
-  yield { result: style };
+  yield { result: new GTA2Style(style) };
 }
 
