@@ -18,36 +18,29 @@ import Shader from './shader';
 import Model from './model';
 import GTA2Style from './gta2_style';
 import GTA2Map from './gta2_map';
+import Loaders from './loaders';
 
-GTA2Style.load('/levels/ste.sty').then(() => {
-  console.log('Style loaded');
-});
-
-
+/*
 GTA2Map.load('/levels/ste.gmp').then(() => {
   console.log('Map loaded');
 });
+*/
 
-function createCanvas() {
+function createCanvas(zIndex = 0) {
   const canvas = document.createElement('canvas');
+  canvas.id = `canvas-${zIndex}`;
   canvas.style.position = 'fixed';
   canvas.style.top = canvas.style.right = canvas.style.bottom = canvas.style.left = 0;
   canvas.style.height = canvas.style.width = '100%';
   canvas.width = window.innerWidth * 2;
   canvas.height = window.innerHeight * 2;
+  canvas.style.zIndex = zIndex;
   document.body.appendChild(canvas);
   return canvas;
 }
 
 function deg2rad(deg) {
   return deg * Math.PI / 180.0;
-}
-
-function drawScene(gl, { camera, shaders, models, textures, state }) {
-  const [pMatrix, vMatrix] = camera.draw(gl, state, [0, 0, 0, 0]);
-  const mMatrix =  mat4.create();
-
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 }
 
 class Input {
@@ -99,8 +92,8 @@ function update(state, step, input) {
   });
 }
 
-function startGame() {
-  const canvas = createCanvas();
+function setupControls() {
+  const canvas = createCanvas(0);
   const gl = initGL(canvas);
   const input = new Input();
   const camera = new Camera();
@@ -110,43 +103,127 @@ function startGame() {
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-  let state = {
-    x: 10.5,
-    y: 7.5,
-    pointingLeft: false,
-    walking: false,
-    jumping: false,
-    ortho: true,
-    zoom: 25
-  };
-
-  Promise.all([
-    Promise.resolve({}),
-    Promise.all([
-      // createPaper(gl),
-      // createPlayer(gl),
-    ]),
-    Promise.all([
-      // Texture.load(gl, maptiles, 0),
-      // Texture.load(gl, playersprite, 1),
-      // Texture.load(gl, papertile, 3),
-      // Texture.load(gl, hatch, 4, { smooth: true, wrap: true }),
-    ]),
-    Promise.all([
-      // Shader.load(gl, 'default'),
-      // Shader.load(gl, 'world'),
-      // Shader.load(gl, 'player'),
-      // Shader.load(gl, 'worldfill'),
-    ])
-  ]).then(([map, models, textures, shaders]) => {
-    function animate(step) {
-      state = update(state, step, input);
-      drawScene(gl, { camera, shaders, models, textures, state, map });
-      window.requestAnimationFrame(animate);
-    }
-
-    animate(0);
-  });
+  return { gl, input, camera };
 }
 
-startGame();
+function setupTextCanvas() {
+  const canvas = createCanvas(1);
+  const ctx = canvas.getContext('2d');
+
+  return { canvas, ctx }
+}
+
+class Game {
+  constructor(level) {
+    this.loaders = new Loaders();
+
+    this.loaders.addLoader('map', GTA2Map.load(`/levels/${level}.gmp`));
+    this.loaders.addLoader('style', GTA2Style.load(`/levels/${level}.sty`));
+
+    this.ticks = 0;
+    this.state = {};
+    this.nextState = {};
+    this.nextStateCallbacks = [];
+
+    this.loaders.on('load', (name, item) => {
+      this.setState({ loadingText: null });
+      this.items[name] = item;
+    });
+
+    this.loaders.on('update', (name, percent, text) => {
+      const loadingText = [
+        name.padEnd(10),
+        text.padEnd(20),
+        percent.toFixed(2).padStart(5) + "%"
+      ].join(' ');
+
+      this.setState({ loadingText });
+    });
+
+    this.running = false;
+    this.items = {};
+
+    this.controls = setupControls();
+    this.canvas2d = setupTextCanvas();
+
+    this._run = this._run.bind(this);
+  }
+
+  setState(state, cb = null) {
+    cb && this.nextStateCallbacks.push(cb);
+    Object.assign(this.nextState, state);
+  }
+
+  start() {
+    this.running = true;
+    this._run(0);
+  }
+
+  stop() {
+    this.running = false;
+  }
+
+  _run(ticks) {
+    this.ticks = ticks;
+
+    if (!this.running) {
+      return;
+    }
+
+    this.update();
+    this.draw();
+
+    window.requestAnimationFrame(this._run);
+  }
+
+  update() {
+    this.loaders.update();
+
+    this._updateState();
+  }
+
+  draw() {
+    // console.log('draw');
+
+    /*
+    if (Object.keys(this.items).length) {
+      console.log(this.items);
+      this.stop();
+    }
+    */
+    const { canvas, gl, camera, input } = this.controls;
+
+    //const [pMatrix, vMatrix] = camera.draw(gl, this.state, [0, 0, 0, 0]);
+    const mMatrix =  mat4.create();
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    this.draw2d();
+  }
+
+  draw2d() {
+    const { ctx, canvas } = this.canvas2d;
+
+    if (!this.state.loadingText) {
+      canvas.style.display = 'none';
+      return;
+    }
+
+    canvas.style.display = 'block';
+
+    const radius = 5.0;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#000000';
+    ctx.font = '50px courier new';
+    ctx.fillText(this.state.loadingText, 200, canvas.height / 2);
+  }
+
+  _updateState() {
+    Object.assign(this.state, this.nextState);
+    this.nextStateCallbacks.forEach((x) => x.call(null, this.state));
+    this.nextStateCallbacks = [];
+    this.nextState = {};
+  }
+}
+const game = new Game('ste');
+game.start();

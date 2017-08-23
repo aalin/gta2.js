@@ -7,7 +7,7 @@ function assert(condition, message) {
 }
 
 export default
-function loadChunks(data, header, version, callback) {
+function* loadChunks(data, header, version, callback) {
   const buffer = new BinaryBuffer(data);
   let style = {};
 
@@ -29,6 +29,6 @@ function loadChunks(data, header, version, callback) {
       throw "chunk header mangled, bad position maybe?";
     }
 
-    callback(chunkHeader, buffer);
+    yield Object.assign({}, chunkHeader, { buffer });
   }
 }

@@ -1,4 +1,4 @@
-import { downloadAsset, promiseSerial, promiseSerialIter } from './utils';
+import { downloadAsset } from './utils';
 import loadChunks from './load_chunks';
 import { packIntLE } from './binary_buffer';
 import { vec3 } from 'gl-matrix';
@@ -82,28 +82,35 @@ function eachSlice(array, size, callback) {
   }
 };
 
-function parseMap(data) {
-  let map = {};
+function* parseMap(data) {
+  for (let chunk of loadChunks(data, 'GBMP', 500)) {
+    const { type, size, buffer } = chunk;
 
-  loadChunks(data, 'GBMP', 500, ({ type, size }, buffer) => {
     switch (type) {
       case 'DMAP':
-        map.base = buffer.read32arrayLE(256 * 256 * INT_SIZE);
+        yield {
+          base: buffer.read32arrayLE(256 * 256 * INT_SIZE)
+        };
 
         const columnWords = buffer.read32LE();
-        map.columns = buffer.read8arrayLE(columnWords * INT_SIZE);
+
+        yield {
+          columns: buffer.read8arrayLE(columnWords * INT_SIZE)
+        };
 
         const numBlocks = buffer.read32LE();
 
-        map.blocks = buffer.readStructs(numBlocks, {
-          left: "16LE",
-          right: "16LE",
-          top: "16LE",
-          bottom: "16LE",
-          lid: "16LE",
-          arrows: "8LE",
-          slopeType: "8LE"
-        });
+        yield {
+          blocks: buffer.readStructs(numBlocks, {
+            left: "16LE",
+            right: "16LE",
+            top: "16LE",
+            bottom: "16LE",
+            lid: "16LE",
+            arrows: "8LE",
+            slopeType: "8LE"
+          })
+        }
 
         break;
       default:
@@ -111,102 +118,82 @@ function parseMap(data) {
         buffer.skip(size);
         break;
     }
-  });
-
-  return map;
-}
-
-function loadBlock(partSize, i, j, x, y, z, attributes) {
-  return new Promise((resolve, reject) => {
-    const offsetIndex = ((y + i * partSize) * 256 + x + j * partSize);
-    const offset = attributes.base[offsetIndex];
-
-    resolve({offsetIndex});
-
-    if (offset === undefined) {
-      return reject(`Could not find offset at index ${offsetIndex}`);
-    }
-
-    if (offset > attributes.columns.length) {
-      return reject(`Offset is out of bounds (${offset} > ${attributes.columns.length})`);
-    }
-
-    const colData = new BinaryBuffer(attributes.columns);
-    colData.skip(offset);
-
-    const column = colData.readStruct(COLUMN_STRUCT);
-
-    if (z < column.height - column.offset) {
-      const blockIndex = column.blockd[z];
-
-      if (blockIndex === undefined) {
-        return reject("block index is undefined");
-      }
-
-      const blockOffset = [x, -y, z + column.offset];
-
-      if (blockIndex > attributes.blocks.length) {
-        return reject(`blockIndex is out of bounds (${blockIndex} to ${attributes.blocks.length})`);
-      }
-
-      const block = attributes.blocks[blockIndex];
-      resolve(buildBlock(block, blockOffset));
-    } else {
-      resolve(null);
-    }
-  });
+  }
 }
 
 let ID = 0;
 
-function loadPart(attributes, partSize, i, j) {
-  console.log('Loading part', partSize, i, j);
+function loadBlock(x, y, z, attributes, colData) {
+  const offsetIndex = (y * 256 + x);
+  const offset = attributes.base[offsetIndex];
 
-  let printed = false;
-  const promises = makeXYZIterator(partSize, partSize, 8, (x, y, z) => {
-    return Promise.resolve(ID++);
-  });
+  if (offset === undefined) {
+    console.error(`Could not find offset at index ${offsetIndex}`);
+    return;
+  }
 
-  return promiseSerialIter(promises);
+  if (offset > attributes.columns.length) {
+    console.error(`Offset is out of bounds (${offset} > ${attributes.columns.length})`);
+    return;
+  }
+
+  colData.setPos(offset);
+
+  const column = colData.readStruct(COLUMN_STRUCT);
+
+  if (z >= column.height - column.offset) {
+    return;
+  }
+
+  const blockIndex = column.blockd[z];
+
+  if (blockIndex === undefined) {
+    console.error("block index is undefined");
+    return;
+  }
+
+  const blockOffset = [x, -y, z + column.offset];
+
+  if (blockIndex > attributes.blocks.length) {
+    //console.error(`blockIndex is out of bounds (${blockIndex} to ${attributes.blocks.length})`);
+    return;
+  }
+
+  const block = attributes.blocks[blockIndex];
+  return buildBlock(block, blockOffset);
 }
 
-function* makeXYZIterator(xmax, ymax, zmax, callback) {
-  for (let z = 0; z < zmax; z++) {
-    console.log('z', z);
-    for (let y = 0; y < ymax; y++) {
-      for (let x = 0; x < xmax; x++) {
-        yield callback(x, y, z);
+function loadPart(colData, attributes, y) {
+  const blocks = [];
+
+  for (let x = 0; x < 256; x++) {
+    for (let z = 0; z < 7; z++) {
+      const block = loadBlock(x, y, z, attributes, colData);
+
+      if (block) {
+        blocks.push(block);
       }
     }
   }
+
+  return blocks;
 }
 
-function* makeXYIterator(xmax, ymax, callback) {
-  for (let y = 0; y < ymax; y++) {
-    for (let x = 0; x < xmax; x++) {
-      yield callback(x, y);
-    }
+function* loadParts(attributes) {
+  const colData = new BinaryBuffer(attributes.columns);
+
+  for (let y = 0; y < 256; y++) {
+      let part = loadPart(colData, attributes, y);
+
+      if (part.length) {
+        yield { progress: y, max: 256, part };
+      }
   }
 }
 
-function loadParts(attributes, partSize = 16) {
-  const size = Math.floor(256 / partSize);
-
-  const promises = makeXYIterator(size, size, (i, j) => {
-    return loadPart(attributes, partSize, i, j);
-  });
-
-  return promiseSerialIter(promises);
-}
 
 export default
 class GTA2Map {
-  static load(filename) {
-    return downloadAsset(filename).then((data) => {
-      return new GTA2Map(parseMap(data));
-    });
-  }
-
   constructor(attributes) {
     this.blocks = [];
 
@@ -266,4 +253,36 @@ class GTA2Map {
 
     let vertices = [];
   }
+}
+
+
+GTA2Map.load = function* load(filename) {
+  let data = null;
+
+  for (let download of downloadAsset(filename)) {
+    if (download.data) {
+      data = download.data;
+      break;
+    }
+
+    yield Object.assign(download, { text: `Downloading ${filename}` });
+  }
+
+  const attributes = {};
+
+  for (let part of parseMap(data)) {
+    Object.assign(attributes, part);
+    yield { progress: 0, max: 100, text: 'Parsing map' };
+  }
+
+  const parts = [];
+
+  for (let part of loadParts(attributes)) {
+    parts.push(part);
+    yield { progress: part.progress, max: part.max, text: 'Loading level' };
+  }
+
+  console.log(parts.length);
+
+  yield { result: parts };
 }

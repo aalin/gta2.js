@@ -40,11 +40,15 @@ function generateNoise(size) {
 }
 
 export
-function downloadAsset(path) {
+function download(path, onProgress = null) {
   return new Promise((resolve) => {
     const oReq = new XMLHttpRequest();
     oReq.open('GET', path, true);
     oReq.responseType = 'arraybuffer';
+
+    if (onProgress) {
+      oReq.onprogress = onProgress;
+    }
 
     oReq.onload = function (oEvent) {
       var arrayBuffer = oReq.response;
@@ -98,4 +102,28 @@ function promiseSerialIter(iter) {
   }
 
   return getNext();
+}
+
+export
+function* downloadAsset(url) {
+  let data = null;
+  let progress = 0;
+  let max = 0;
+
+  yield { progress, max };
+
+  function onProgress(e) {
+    progress = e.loaded;
+    max = e.total;
+  }
+
+  download(url, onProgress).then((file) => {
+    data = file;
+  });
+
+  while (data === null) {
+    yield { progress, max };
+  }
+
+  yield { data };
 }
