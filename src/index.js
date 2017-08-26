@@ -117,9 +117,6 @@ class Game {
   constructor(level) {
     this.loaders = new Loaders();
 
-    this.loaders.addLoader('map', GTA2Map.load(`/levels/${level}.gmp`));
-    this.loaders.addLoader('style', GTA2Style.load(`/levels/${level}.sty`));
-
     this.ticks = 0;
     this.state = {};
     this.nextState = {};
@@ -143,10 +140,15 @@ class Game {
     this.running = false;
     this.items = {};
 
+    this.input = new Input();
+
     this.controls = setupControls();
     this.canvas2d = setupTextCanvas();
 
     this._run = this._run.bind(this);
+
+    // this.loaders.addLoader('map', GTA2Map.load(`/levels/${level}.gmp`));
+    this.loaders.addLoader('style', GTA2Style.load(this.controls, `/levels/${level}.sty`));
   }
 
   setState(state, cb = null) {

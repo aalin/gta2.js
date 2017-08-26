@@ -10,6 +10,97 @@ function result(buffer, result) {
   };
 }
 
+function getPaletteValue(paletteData, paletteIndex, colorIndex) {
+  const pageStart = Math.floor((paletteIndex / 64)) * 64 * 256 * 4;
+	const idx = pageStart + (paletteIndex % 64) + colorIndex * 64;
+	const value = paletteData[idx];
+  if (value === undefined) {
+    throw `value: ${value}`;
+  }
+  return value;
+}
+
+function createTextureCanvas(size) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  canvas.width = size;
+  canvas.height = size;
+
+  return { ctx, canvas };
+}
+
+function putPixel(ctx, x, y, rgba) {
+  const [r, g, b, a] = rgba;
+  ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+  ctx.fillRect(x, y, 1, 1);
+}
+
+function extractColor(integer) {
+  const a = ((integer >> 24) & 0xff) >>> 0;
+  const r = ((integer >> 16) & 0xff) >>> 0;
+  const g = ((integer >> 8) & 0xff) >>> 0;
+  const b = ((integer >> 0) & 0xff) >>> 0;
+
+  return [r, g, b, a];
+}
+
+function* loadTextures(gl, style) {
+  const pageSize = 256 * 256;
+
+  for(let pageNum = 0; pageNum < 62; pageNum++) {
+    const pageOffset = pageSize * pageNum;
+
+    const { canvas, ctx } = createTextureCanvas(256);
+    let allEmpty = true;
+
+    for(let y = 0; y < 4; y++) {
+      for(let x = 0; x < 4; x++) {
+        const tileIndex = pageNum * 16 + y * 4 + x;
+        const paletteIndex = style.paletteIndex[tileIndex];
+
+        let hasTransparency = false;
+
+        for(let tileY = 0; tileY < 64; tileY++) {
+          for(let tileX = 0; tileX < 64; tileX++) {
+            const idx = (y * 64 + tileY) * 256 + x * 64 + tileX;
+            const c = style.tiles[pageOffset + idx];
+
+            const px = x * 64 + tileX;
+            const py = y * 64 + tileY;
+
+            if (!c) {
+              hasTransparency = true;
+              putPixel(ctx, px, py, [0, 0, 0, 0]);
+            } else {
+              allEmpty = false;
+              const rgba = (getPaletteValue(style.physicalPalettes, paletteIndex, c) | 0xff000000) >>> 0;
+              putPixel(ctx, px, py, extractColor(rgba));
+            }
+          }
+        }
+
+        yield { _message: "hatt", _progress: pageNum, _max: 62 };
+
+        // const texture = Texture.load(gl, canvas.toDataURL());
+        //yield { texture };
+      }
+    }
+
+    if (allEmpty) {
+      break;
+    }
+
+    canvas.id = `canvas-2`;
+    canvas.style.position = 'fixed';
+    canvas.style.top = canvas.style.right = canvas.style.bottom = canvas.style.left = 0;
+    canvas.style.height = canvas.style.width = '100%';
+    canvas.style.zIndex = 2;
+    document.body.appendChild(canvas);
+    console.log(canvas);
+  }
+}
+
 function* parseStyle(data) {
   for (let chunk of loadChunks(data, 'GBST', 700)) {
     console.log('chunk', chunk);
@@ -55,7 +146,7 @@ export default class GTA2Style {
   }
 }
 
-GTA2Style.load = function* load(filename) {
+GTA2Style.load = function* load(gl, filename) {
   let data = null;
 
   for (let download of downloadAsset(filename)) {
@@ -74,6 +165,18 @@ GTA2Style.load = function* load(filename) {
       yield { progress: details._progress, max: details._max, text: `Parsing style (${details._type})` };
     } else {
       Object.assign(style, details);
+    }
+  }
+
+  const textures = [];
+
+  for (let details of loadTextures(gl, style)) {
+    if (details._progress) {
+      yield { progress: details._progress, max: details._max, text: `Loading textures textures (${details._type})` };
+    }
+
+    if (details.texture) {
+      textures.push(details.texture);
     }
   }
 
