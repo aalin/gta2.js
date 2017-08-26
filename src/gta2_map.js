@@ -8,11 +8,21 @@ let ITERATIONS = 0;
 
 const INT_SIZE = 4;
 
-const COLUMN_STRUCT = new StructReader({
+const ColInfo = new StructReader({
   height: '8LE',
   offset: '8LE',
-  pad: '8LE',
+  pad: '16LE',
   blockd: ['32arrayLE', 8 * INT_SIZE]
+});
+
+const BlockInfo = new StructReader({
+  left: "16LE",
+  right: "16LE",
+  top: "16LE",
+  bottom: "16LE",
+  lid: "16LE",
+  arrows: "8LE",
+  slopeType: "8LE"
 });
 
 function buildLid(slopeType) {
@@ -28,8 +38,102 @@ function buildLid(slopeType) {
   }
 }
 
-function buildBlock(block, blockOffset) {
-  return { block: block, offset: blockOffset };
+function Vertex(position, texcoords) {
+  this.position = position;
+  this.texcoords = texcoords;
+}
+
+class Block {
+  constructor(block, column, offset) {
+    this.block = block;
+    this.offset = offset;
+    this.column = column;
+  }
+
+  getFaces() {
+    const slopeType = (block.slopeType >> 2) >>> 0;
+    const lid = buildLid(slopeType);
+    const block = this.block;
+
+    return [
+      getFace(block.lid, lid),
+      getFace(block.bottom, [
+        [0, 0, -1],
+        [1, 0, -1],
+        lid[1],
+        lid[0]
+      ]),
+      getFace(block.top, [
+        [0, 1, -1],
+        [1, 1, -1],
+        lid[2],
+        lid[3]
+      ]),
+      getFace(block.left, [
+        [0, 0, -1],
+        [0, 1, -1],
+        lid[3],
+        lid[0]
+      ]),
+      getFace(block.right, [
+        [1, 1, -1],
+        [1, 0, -1],
+        lid[1],
+        lid[2]
+      ])
+    ].filter(x => !!x);
+  }
+
+  getFace(face, quad) {
+    const texture = (face & 0x3ff) >>> 0;
+
+    if (!texture) {
+      return;
+    }
+
+    const vertices = Array.from({ length: 4 }, () => new Vertex());
+    vertices[0].position = quad[0];
+    vertices[1].position = quad[1];
+    vertices[2].position = quad[2];
+    vertices[3].position = quad[3];
+    vertices[0].texcoord = [0, 0];
+    vertices[1].texcoord = [1, 0];
+    vertices[2].texcoord = [1, 1];
+    vertices[3].texcoord = [0, 1];
+
+    const flip = (face & 0x2000) >>> 0;
+
+    if (flip) {
+      vertices.forEach(v => {
+        vec2.scale(v.texcoord, v.texcoord, [-1, 1]);
+      });
+    }
+
+    vertices.forEach(v => {
+      vec2.scale(v.texcoord, v.texcoord, [1,-1]);
+    });
+
+    const rotation = ((face >> 14) >>> 0) * 90;
+
+    vertices.forEach(v => {
+      //vec2.translate(v.texcoord, v.texcoord, [-0.5, -0.5, 0]);
+      // vec2.rotateZ(v.texcoord, v.texcoord, [-0.5, -0.5, 0]);
+      //vec2.rotate(v.texcoord, v.texcoord, [-0.5, -0.5, 0]);
+    });
+
+    vertices.forEach(v => {
+      vec2.add(v.position, this.offset);
+    });
+
+    return [
+      vertices[0],
+      vertices[1],
+      vertices[2],
+      vertices[0],
+      vertices[2],
+      vertices[3]
+    ];
+  }
 }
 
 function constructLid(slope, numLevels) {
@@ -80,7 +184,7 @@ function eachSlice(array, size, callback) {
   for (var i = 0, l = array.length; i < l; i += size){
     callback.call(array, array.slice(i, i + size))
   }
-};
+}
 
 function* parseMap(data) {
   for (let chunk of loadChunks(data, 'GBMP', 500)) {
@@ -88,29 +192,22 @@ function* parseMap(data) {
 
     switch (type) {
       case 'DMAP':
-        yield {
-          base: buffer.read32arrayLE(256 * 256 * INT_SIZE)
-        };
+        yield { base: buffer.read32arrayLE(256 * 256 * INT_SIZE) };
 
         const columnWords = buffer.read32LE();
 
-        yield {
-          columns: buffer.read8arrayLE(columnWords * INT_SIZE)
-        };
+        yield { columnWords };
+
+        yield { columns: buffer.read8arrayLE(columnWords) };
 
         const numBlocks = buffer.read32LE();
 
-        yield {
-          blocks: buffer.readStructs(numBlocks, {
-            left: "16LE",
-            right: "16LE",
-            top: "16LE",
-            bottom: "16LE",
-            lid: "16LE",
-            arrows: "8LE",
-            slopeType: "8LE"
-          })
-        }
+        yield { numBlocks };
+
+        console.log("num columns:", columnWords);
+        console.log("num blocks:", numBlocks);
+
+        yield { blocks: buffer.readStructs(numBlocks, BlockInfo) };
 
         break;
       default:
@@ -122,9 +219,10 @@ function* parseMap(data) {
 }
 
 let ID = 0;
+let lastOffset = 0;
 
-function loadBlock(x, y, z, attributes, colData) {
-  const offsetIndex = (y * 256 + x);
+function loadCell(x, y, attributes, colData) {
+  const offsetIndex = y * 256 + x;
   const offset = attributes.base[offsetIndex];
 
   if (offset === undefined) {
@@ -137,38 +235,18 @@ function loadBlock(x, y, z, attributes, colData) {
     return;
   }
 
-  colData.setPos(offset);
-
-  const column = colData.readStruct(COLUMN_STRUCT);
-
-  if (z >= column.height - column.offset) {
+  if (offset >= colData.length) {
     return;
   }
 
-  const blockIndex = column.blockd[z];
+  colData.setPos(offset).inspect();
+  const column = colData.readStruct(ColInfo);
 
-  if (blockIndex === undefined) {
-    console.error("block index is undefined");
-    return;
-  }
-
-  const blockOffset = [x, -y, z + column.offset];
-
-  if (blockIndex > attributes.blocks.length) {
-    //console.error(`blockIndex is out of bounds (${blockIndex} to ${attributes.blocks.length})`);
-    return;
-  }
-
-  const block = attributes.blocks[blockIndex];
-  return buildBlock(block, blockOffset);
-}
-
-function loadPart(colData, attributes, y) {
   const blocks = [];
 
-  for (let x = 0; x < 256; x++) {
-    for (let z = 0; z < 7; z++) {
-      const block = loadBlock(x, y, z, attributes, colData);
+  for (let z = 0; z < 8; z++) {
+    if (z < column.height - column.offset) {
+      const block = loadBlock(x, y, z, attributes, column);
 
       if (block) {
         blocks.push(block);
@@ -179,15 +257,50 @@ function loadPart(colData, attributes, y) {
   return blocks;
 }
 
+function loadBlock(x, y, z, attributes, column) {
+  const blockIndex = column.blockd[z];
+
+  const height = column.height - column.offset;
+  // console.log(blockIndex);
+
+  if (blockIndex === undefined) {
+    console.error("blockIndex is undefined", x, y, z, column.blockd);
+    throw "blockIndex is undefined";
+    return;
+  }
+
+  if (blockIndex > attributes.blocks.length) {
+    //console.error(`blockIndex is out of bounds (${blockIndex} > ${attributes.blocks.length})`);
+    return;
+  }
+
+  const block = attributes.blocks[blockIndex];
+
+  // console.log(blockIndex, column, attributes.blocks.length, block);
+
+  return new Block(column, block, [x, y, z + column.offset]);
+}
+
+function loadPart(colData, attributes, y) {
+  const cells = [];
+
+  for (let x = 0; x < 256; x++) {
+    const cell = loadCell(x, y, attributes, colData);
+    cells.push(cell);
+  }
+
+  return cells;
+}
+
 function* loadParts(attributes) {
   const colData = new BinaryBuffer(attributes.columns);
 
   for (let y = 0; y < 256; y++) {
-      let part = loadPart(colData, attributes, y);
+    let part = loadPart(colData, attributes, y);
 
-      if (part.length) {
-        yield { progress: y, max: 256, result: part };
-      }
+    if (part.length) {
+      yield { progress: y, max: 256, result: part };
+    }
   }
 }
 
@@ -283,6 +396,8 @@ GTA2Map.load = function* load(filename) {
   }
 
   console.log(parts.length);
+
+  const vertexes = [];
 
   yield { result: parts };
 }

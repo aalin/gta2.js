@@ -95,11 +95,12 @@ export default class BinaryByffer {
   }
 
   set pos(pos) {
-    this[_pos] = pos;
+    this[_pos] = Math.max(0, Math.min(pos, this.length));
   }
 
   setPos(pos) {
-    this[_pos] = pos;
+    this.pos = pos;
+    return this;
   }
 
   read8() {
@@ -143,8 +144,12 @@ export default class BinaryByffer {
   }
 
   readStructs(count, struct) {
-    const structReader = new StructReader(struct);
-    return Array.from({ length: count }, () => this.readStruct(structReader));
+    if (struct instanceof StructReader) {
+       // return Array.from({ length: count }, (_, i) => (console.log(i, this.pos, this.length), struct.read(this)));
+      return Array.from({ length: count }, (_, i) => struct.read(this));
+    }
+
+    return this.readStructs(count, new StructReader(struct));
   }
 
   readStruct(struct) {
@@ -211,7 +216,7 @@ export default class BinaryByffer {
   }
 
   skip(length) {
-    this[_pos] += length;
+    this.pos += length;
   }
 
   eof() {
