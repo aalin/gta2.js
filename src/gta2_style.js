@@ -47,48 +47,55 @@ function extractColor(integer) {
 
 function* loadTextures(gl, style) {
   const pageSize = 256 * 256;
+  const pagesPerTexture = 2;
+  const pagesPerTexture2 = pagesPerTexture * pagesPerTexture
 
-  for(let pageNum = 0; pageNum < 62; pageNum++) {
-    const pageOffset = pageSize * pageNum;
-
-    const { canvas, ctx } = createTextureCanvas(256);
+  for(let ii = 0; ii < Math.ceil(62 / pagesPerTexture2); ii++) {
+    const { canvas, ctx } = createTextureCanvas(256 * pagesPerTexture);
     let allEmpty = true;
 
-    for(let y = 0; y < 4; y++) {
-      for(let x = 0; x < 4; x++) {
-        const tileIndex = pageNum * 16 + y * 4 + x;
-        const paletteIndex = style.paletteIndex[tileIndex];
+    for (let i = 0; i < pagesPerTexture; i++) {
+      for (let j = 0; j < pagesPerTexture; j++) {
+        const pageNum = ii * pagesPerTexture2 + i * pagesPerTexture + j;
+        const pageOffset = pageSize * pageNum;
 
-        let hasTransparency = false;
+        for(let y = 0; y < 4; y++) {
+          for(let x = 0; x < 4; x++) {
+            const tileIndex = pageNum * 16 + y * 4 + x;
+            const paletteIndex = style.paletteIndex[tileIndex];
 
-        for(let tileY = 0; tileY < 64; tileY++) {
-          for(let tileX = 0; tileX < 64; tileX++) {
-            const idx = (y * 64 + tileY) * 256 + x * 64 + tileX;
-            const c = style.tiles[pageOffset + idx];
+            let hasTransparency = false;
 
-            const px = x * 64 + tileX;
-            const py = y * 64 + tileY;
+            for(let tileY = 0; tileY < 64; tileY++) {
+              for(let tileX = 0; tileX < 64; tileX++) {
+                const idx = (y * 64 + tileY) * 256 + x * 64 + tileX;
+                const c = style.tiles[pageOffset + idx];
 
-            if (!c) {
-              hasTransparency = true;
-              putPixel(ctx, px, py, [0, 0, 0, 0]);
-            } else {
-              allEmpty = false;
-              const rgba = (getPaletteValue(style.physicalPalettes, paletteIndex, c) | 0xff000000) >>> 0;
-              putPixel(ctx, px, py, extractColor(rgba));
+                const px = i * 256 + x * 64 + tileX;
+                const py = j * 256 + y * 64 + tileY;
+
+                if (!c) {
+                  hasTransparency = true;
+                  putPixel(ctx, px, py, [0, 0, 0, 0]);
+                } else {
+                  allEmpty = false;
+                  const rgba = (getPaletteValue(style.physicalPalettes, paletteIndex, c) | 0xff000000) >>> 0;
+                  putPixel(ctx, px, py, extractColor(rgba));
+                }
+              }
             }
+
+            yield { _message: "hatt", _progress: pageNum, _max: 62 };
+
+            //yield { texture };
           }
         }
-
-        yield { _message: "hatt", _progress: pageNum, _max: 62 };
-
-        // const texture = Texture.load(gl, canvas.toDataURL());
-        //yield { texture };
       }
-    }
 
-    if (allEmpty) {
-      break;
+      if (allEmpty) {
+        console.error('All textures are empty');
+        break;
+      }
     }
 
     canvas.id = `canvas-2`;
@@ -96,8 +103,11 @@ function* loadTextures(gl, style) {
     canvas.style.top = canvas.style.right = canvas.style.bottom = canvas.style.left = 0;
     canvas.style.height = canvas.style.width = '100%';
     canvas.style.zIndex = 2;
-    document.body.appendChild(canvas);
-    console.log(canvas);
+
+    const texture = new Texture(gl, ii, canvas);
+    console.log(texture);
+    // document.body.appendChild(canvas);
+    // console.log(canvas);
   }
 }
 

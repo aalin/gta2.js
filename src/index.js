@@ -148,7 +148,7 @@ class Game {
     this._run = this._run.bind(this);
 
     // this.loaders.addLoader('map', GTA2Map.load(`/levels/${level}.gmp`));
-    this.loaders.addLoader('style', GTA2Style.load(this.controls, `/levels/${level}.sty`));
+    this.loaders.addLoader('style', GTA2Style.load(this.controls.gl, `/levels/${level}.sty`));
   }
 
   setState(state, cb = null) {
