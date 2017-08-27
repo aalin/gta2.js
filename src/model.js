@@ -21,7 +21,7 @@ class IndexBuffer {
   }
 
   draw(mode, offset = 0, count = this.count) {
-    this.gl.drawElements(mode, count, gl.UNSIGNED_SHORT, this.buffer);
+    this.gl.drawElements(mode, count / 3, this.gl.UNSIGNED_SHORT, this.buffer);
   }
 }
 

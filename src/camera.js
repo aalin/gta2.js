@@ -24,20 +24,17 @@ export default class Camera {
     mat4.scale(vMatrix, vMatrix, [1.0, -1.0, 1.0]);
     mat4.translate(vMatrix, vMatrix, [-state.x, -state.y, -10.0]);
 
-    /*
+    return [pMatrix, vMatrix];
+  }
 
-    const eyeX = state.x;
-    const eyeY = state.y;
-    const eyeZ = 1.0;
-
-    const eye = [-eyeX, eyeY, eyeZ];
-    const center = [-eyeX, eyeY, 0.0];
-
-    mat4.lookAt(vMatrix, eye, center, [0.0, -1.0, 0.0]);
+  lookat(gl, eye, center, up) {
+    gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    const pMatrix = mat4.create();
+    mat4.perspective(pMatrix, 45.0, 1.0, 1.0, 100.0);
+    const vMatrix = mat4.create();
+    mat4.lookAt(vMatrix, eye, center, up);
     mat4.scale(vMatrix, vMatrix, [-1.0, 1.0, 1.0]);
-    */
-
-
     return [pMatrix, vMatrix];
   }
 }

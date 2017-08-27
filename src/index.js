@@ -124,6 +124,12 @@ class Game {
 
     this.loaders.on('load', (name, item) => {
       this.setState({ loadingText: null });
+
+      if (name === 'map') {
+        this.items[name] = new GTA2Map(item.models);
+        return;
+      }
+
       this.items[name] = item;
     });
 
@@ -147,8 +153,16 @@ class Game {
 
     this._run = this._run.bind(this);
 
-    // this.loaders.addLoader('map', GTA2Map.load(`/levels/${level}.gmp`));
-    this.loaders.addLoader('style', GTA2Style.load(this.controls.gl, `/levels/${level}.sty`));
+    this.loaders.addLoader('shader',
+      Shader.load(
+        this.controls.gl,
+        () => System.import("./shaders/default.vert"),
+        () => System.import("./shaders/default.frag"),
+      )
+    );
+
+    this.loaders.addLoader('map', GTA2Map.load(this.controls.gl, `/levels/${level}.gmp`));
+    // kthis.loaders.addLoader('style', GTA2Style.load(this.controls.gl, `/levels/${level}.sty`));
   }
 
   setState(state, cb = null) {
@@ -181,6 +195,10 @@ class Game {
   update() {
     this.loaders.update();
 
+    if (this.controls.input.isDown(KEY_SPACE)) {
+      this.stop();
+    }
+
     this._updateState();
   }
 
@@ -195,9 +213,26 @@ class Game {
     */
     const { canvas, gl, camera, input } = this.controls;
 
-    //const [pMatrix, vMatrix] = camera.draw(gl, this.state, [0, 0, 0, 0]);
-    const mMatrix =  mat4.create();
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    const cameraState = {
+      zoom: 10.0,
+    };
+
+    const x = Math.cos(this.ticks / 1000.0) * 50.0;
+    const y = 20.0;
+    const z = 10.0;
+    const [pMatrix, vMatrix] = camera.lookat(gl, [x, y, z], [-50, 50, 0], [0, 0, 1]);
+
+    const matrices = {
+      p: pMatrix,
+      v: vMatrix,
+      m: mat4.create()
+    };
+
+    if (this.items.map) {
+      if (this.items.shader) {
+        this.items.map.draw(gl, this.items.shader, matrices);
+      }
+    }
 
     this.draw2d();
   }

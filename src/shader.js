@@ -29,19 +29,7 @@ function initShaderProgram(gl, vertSrc, fragSrc) {
   return shaderProgram;
 }
 
-const requireShader = require.context('./shaders/', true, /\.(vert|frag)$/);
-
 export default class Shader {
-  static load(gl, name) {
-    return Promise.resolve(
-      new Shader(
-        gl,
-        requireShader(`./${name}.vert`),
-        requireShader(`./${name}.frag`)
-      )
-    );
-  }
-
   constructor(gl, vertSrc, fragSrc) {
     this.gl = gl;
     this.shader = initShaderProgram(gl, vertSrc, fragSrc);
@@ -94,4 +82,29 @@ export default class Shader {
   use() {
     this.gl.useProgram(this.shader);
   }
+}
+
+Shader.load = function* load(gl, loadVertexShader, loadFragmentShader) {
+  let vertexShader = null;
+  let fragmentShader = null;
+
+  loadVertexShader().then((shader) => {
+    vertexShader = shader;
+  });
+
+  while (!vertexShader) {
+    yield { progress: 0, max: 2, text: 'Loading vertex shader' };
+  }
+
+  loadFragmentShader().then((shader) => {
+    fragmentShader = shader;
+  });
+
+  while (!fragmentShader) {
+    yield { progress: 1, max: 2, text: 'Loading fragment shader' };
+  }
+
+  const result = new Shader(gl, vertexShader, fragmentShader);
+
+  yield { result };
 }

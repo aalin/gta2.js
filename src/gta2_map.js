@@ -3,6 +3,7 @@ import loadChunks from './load_chunks';
 import { packIntLE } from './binary_buffer';
 import { vec3 } from 'gl-matrix';
 import BinaryBuffer, { StructReader } from './binary_buffer';
+import Model from './model';
 
 let ITERATIONS = 0;
 
@@ -24,6 +25,24 @@ const BlockInfo = new StructReader({
   arrows: "8LE",
   slopeType: "8LE"
 });
+
+function* createXYiterator(count, xadd = 0, yadd = 0) {
+  for (let y = 0; y < count; y++) {
+    for (let x = 0; x < count; x++) {
+      yield [x + xadd, y + yadd];
+    }
+  }
+}
+
+function* subdivide(size, partSize) {
+  const numParts = size / partSize;
+
+  for (let y = 0; y < numParts; y++) {
+    for (let x = 0; x < numParts; x++) {
+      yield createXYiterator(partSize, y * partSize, x * partSize);
+    }
+  }
+}
 
 function buildLid(slopeType) {
   switch (true) {
@@ -198,7 +217,7 @@ function* parseMap(data) {
 
         yield { columnWords };
 
-        yield { columns: buffer.read8arrayLE(columnWords) };
+        yield { columns: buffer.read32arrayLE(columnWords) };
 
         const numBlocks = buffer.read32LE();
 
@@ -292,35 +311,102 @@ function loadPart(colData, attributes, y) {
   return cells;
 }
 
+function flatten(a) {
+  if (a instanceof Array) {
+    return a.reduce((acc, e) => acc.concat(flatten(e)), []);
+  }
+
+  return a;
+}
+
+function quad(x, y, z) {
+  return [
+    [x, y, z],
+    [x, y+1, z],
+    [x+1, y+1, z],
+  ].concat([
+    [x, y, z],
+    [x+1, y+1, z],
+    [x+1, y, z],
+  ]);
+}
+
+function generateVertexes(block, x, y, z) {
+  return quad(x, y, z);
+}
+
+function* loadVertexes(parts) {
+  const size = parts.length;
+  let count = 0;
+
+  for (let divider of subdivide(256, 32)) {
+    let vertexes = [];
+
+    for (let col of divider) {
+      const [x, y] = col;
+      const column = parts[y][x];
+
+      for (let z = 0; z < column.length; z++) {
+        const block = column[z];
+
+        if (block === undefined) {
+          continue;
+        }
+
+        vertexes = vertexes.concat(generateVertexes(block, x, y, z));
+      }
+    }
+
+    yield { vertexes: flatten(vertexes), progress: count++ * 256, max: 256*256*2 }
+  }
+}
+
 function* loadParts(attributes) {
   const colData = new BinaryBuffer(attributes.columns);
 
   for (let y = 0; y < 256; y++) {
-    let part = loadPart(colData, attributes, y);
+    const part = [];
 
-    if (part.length) {
-      yield { progress: y, max: 256, result: part };
+    yield { progress: y, max: 256 };
+
+    for (let x = 0; x < 256; x++) {
+      part[x] = [];
+
+      const columnIndex = attributes.base[y * 256 + x];
+      const height = attributes.columns[columnIndex] & 0xff;
+      const offset = (attributes.columns[columnIndex] & 0xff00) >> 8;
+
+      for (var z = 0; z < height; z++) {
+        if (z >= offset) {
+          const blockIndex = attributes.columns[columnIndex + z - offset];
+          const block = attributes.blocks[blockIndex];
+
+          if (block) {
+            part[x][z] = block;
+          }
+        }
+      }
     }
+
+    yield { progress: y, max: 256, result: part };
   }
 }
 
 
 export default
 class GTA2Map {
-  constructor(attributes) {
-    this.blocks = [];
+  constructor(models) {
+    this.models = models;
+  }
 
-    const startAt = new Date();
+  draw(gl, shader, matrices) {
+    shader.use();
+    gl.uniformMatrix4fv(shader.uniform('uPMatrix'), false, matrices.p);
+    gl.uniformMatrix4fv(shader.uniform('uVMatrix'), false, matrices.v);
+    gl.uniformMatrix4fv(shader.uniform('uMMatrix'), false, matrices.m);
 
-    console.log('loading parts');
-    // TODO: Try here without promises.
-    // Implement a loader class which we can call on each update
-    loadParts(attributes, 16).then((parts) => {
-      console.log(parts.slice(-1)[0].slice(-1)[0]);
-      console.log('got parts', parts.length);
-      console.log('time', (new Date() - startAt) / 1000.0);
-      console.log(ITERATIONS);
-      console.log(parts);
+    this.models.forEach((model) => {
+      model.draw(shader);
     });
   }
 
@@ -368,8 +454,7 @@ class GTA2Map {
   }
 }
 
-
-GTA2Map.load = function* load(filename) {
+GTA2Map.load = function* load(gl, filename) {
   let data = null;
 
   for (let download of downloadAsset(filename)) {
@@ -391,13 +476,23 @@ GTA2Map.load = function* load(filename) {
   const parts = [];
 
   for (let part of loadParts(attributes)) {
-    parts.push(part.result);
-    yield { progress: part.progress, max: part.max, text: 'Loading level' };
+    if (part.result) {
+      parts.push(part.result);
+    }
+    yield { progress: part.progress, max: part.max, text: 'Decompressing map' };
   }
 
-  console.log(parts.length);
+  const models = [];
 
-  const vertexes = [];
+  for (let part of loadVertexes(parts)) {
+    if (part.vertexes) {
+      const model = new Model(gl, gl.TRIANGLES);
+      model.addBuffer('aVertexPosition', Float32Array.from(part.vertexes), 3);
+      models.push(model);
+    }
 
-  yield { result: parts };
+    yield { progress: part.progress, max: part.max, text: `Creating map models ${models.length}` };
+  }
+
+  yield { result: { models } };
 }
