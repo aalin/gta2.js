@@ -1,7 +1,7 @@
 import { downloadAsset } from './utils';
 import loadChunks from './load_chunks';
 import { packIntLE } from './binary_buffer';
-import { vec3 } from 'gl-matrix';
+import { vec2, vec3 } from 'gl-matrix';
 import BinaryBuffer, { StructReader } from './binary_buffer';
 import Model from './model';
 
@@ -57,102 +57,79 @@ function buildLid(slopeType) {
   }
 }
 
-function Vertex(position, texcoords) {
+function Vertex(position, texcoord = [0, 0]) {
   this.position = position;
-  this.texcoords = texcoords;
+  this.texcoord = texcoord;
 }
 
-class Block {
-  constructor(block, column, offset) {
-    this.block = block;
-    this.offset = offset;
-    this.column = column;
+const TEXCOORDS = [
+  [0.0, 0.0],
+  [1.0, 0.0],
+  [1.0, 1.0],
+  [0.0, 1.0],
+]
+
+function getFace(face, quad, offset) {
+  const texture = (face & 0x3ff) >>> 0;
+
+  if (!texture) {
+    return [];
   }
 
-  getFaces() {
-    const slopeType = (block.slopeType >> 2) >>> 0;
-    const lid = buildLid(slopeType);
-    const block = this.block;
+  const vertexes = Array.from({ length: 4 }, (_, i) => {
+    const position = vec3.add([0, 0, 0], quad[i], offset);
+    return new Vertex(position, TEXCOORDS[i]);
+  });
 
-    return [
-      getFace(block.lid, lid),
-      getFace(block.bottom, [
-        [0, 0, -1],
-        [1, 0, -1],
-        lid[1],
-        lid[0]
-      ]),
-      getFace(block.top, [
-        [0, 1, -1],
-        [1, 1, -1],
-        lid[2],
-        lid[3]
-      ]),
-      getFace(block.left, [
-        [0, 0, -1],
-        [0, 1, -1],
-        lid[3],
-        lid[0]
-      ]),
-      getFace(block.right, [
-        [1, 1, -1],
-        [1, 0, -1],
-        lid[1],
-        lid[2]
-      ])
-    ].filter(x => !!x);
-  }
+  const flip = (face & 0x2000) >>> 0;
+  const rotation = ((face >> 14) >>> 0) * 90;
 
-  getFace(face, quad) {
-    const texture = (face & 0x3ff) >>> 0;
+  const res = [
+    vertexes[0],
+    vertexes[1],
+    vertexes[2],
+    vertexes[0],
+    vertexes[2],
+    vertexes[3],
+  ];
 
-    if (!texture) {
-      return;
-    }
+  return res;
+}
 
-    const vertices = Array.from({ length: 4 }, () => new Vertex());
-    vertices[0].position = quad[0];
-    vertices[1].position = quad[1];
-    vertices[2].position = quad[2];
-    vertices[3].position = quad[3];
-    vertices[0].texcoord = [0, 0];
-    vertices[1].texcoord = [1, 0];
-    vertices[2].texcoord = [1, 1];
-    vertices[3].texcoord = [0, 1];
+function getBlock(block, offset) {
+  const slopeType = (block.slopeType >> 2) >>> 0;
+  const lid = buildLid(slopeType);
 
-    const flip = (face & 0x2000) >>> 0;
+  //const lid = quad(0, 0, 0);
+  return getFace(block.lid, lid, offset);
 
-    if (flip) {
-      vertices.forEach(v => {
-        vec2.scale(v.texcoord, v.texcoord, [-1, 1]);
-      });
-    }
-
-    vertices.forEach(v => {
-      vec2.scale(v.texcoord, v.texcoord, [1,-1]);
-    });
-
-    const rotation = ((face >> 14) >>> 0) * 90;
-
-    vertices.forEach(v => {
-      //vec2.translate(v.texcoord, v.texcoord, [-0.5, -0.5, 0]);
-      // vec2.rotateZ(v.texcoord, v.texcoord, [-0.5, -0.5, 0]);
-      //vec2.rotate(v.texcoord, v.texcoord, [-0.5, -0.5, 0]);
-    });
-
-    vertices.forEach(v => {
-      vec2.add(v.position, this.offset);
-    });
-
-    return [
-      vertices[0],
-      vertices[1],
-      vertices[2],
-      vertices[0],
-      vertices[2],
-      vertices[3]
-    ];
-  }
+  return [
+    getFace(block.lid, lid, offset),
+    getFace(block.bottom, [
+      [0, 0, -1],
+      [1, 0, -1],
+      lid[1],
+      lid[0]
+    ], offset),
+    getFace(block.top, [
+      [0, 1, -1],
+      [1, 1, -1],
+      lid[2],
+      lid[3]
+    ], offset),
+    getFace(block.left, [
+      [0, 0, -1],
+      [0, 1, -1],
+      lid[3],
+      lid[0]
+    ], offset),
+    getFace(block.right, [
+      [1, 1, -1],
+      [1, 0, -1],
+      lid[1],
+      lid[2]
+    ], offset)
+  ].filter(x => !!x);
 }
 
 function constructLid(slope, numLevels) {
@@ -324,15 +301,12 @@ function quad(x, y, z) {
     [x, y, z],
     [x, y+1, z],
     [x+1, y+1, z],
-  ].concat([
-    [x, y, z],
-    [x+1, y+1, z],
     [x+1, y, z],
-  ]);
+  ];
 }
 
 function generateVertexes(block, x, y, z) {
-  return quad(x, y, z);
+  return getBlock(block, [x, y, z]);
 }
 
 function* loadVertexes(parts) {
@@ -340,7 +314,8 @@ function* loadVertexes(parts) {
   let count = 0;
 
   for (let divider of subdivide(256, 32)) {
-    let vertexes = [];
+    let positions = [];
+    let texcoords = [];
 
     for (let col of divider) {
       const [x, y] = col;
@@ -353,11 +328,14 @@ function* loadVertexes(parts) {
           continue;
         }
 
-        vertexes = vertexes.concat(generateVertexes(block, x, y, z));
+        const v = generateVertexes(block, x, y, z);
+        positions = positions.concat(v.map(vs => vs.position));
+        texcoords = texcoords.concat(v.map(vs => vs.texcoord));
       }
     }
+    console.log(positions);
 
-    yield { vertexes: flatten(vertexes), progress: count++ * 256, max: 256*256*2 }
+    yield { positions: flatten(positions), texcoords: texcoords, progress: count++ * 256, max: 256*256*2 }
   }
 }
 
@@ -382,7 +360,7 @@ function* loadParts(attributes) {
           const block = attributes.blocks[blockIndex];
 
           if (block) {
-            part[x][z] = block;
+            part[x][z + offset] = block;
           }
         }
       }
@@ -409,55 +387,15 @@ class GTA2Map {
       model.draw(shader);
     });
   }
-
-  addBlock(block, offset, part) {
-    const rotation = 0;
-
-    const lid = buildLid(block.slopeType);
-    this.addFace(offset, part, block.lid, lid);
-    this.addFace(offset, part, block.bottom, [
-      [0, 0, -1],
-      [1, 0, -1],
-      lid[1],
-      lid[0]
-    ]);
-    this.addFace(offset, part, block.top, [
-      [0, 1, -1],
-      [1, 1, -1],
-      lid[2],
-      lid[3]
-    ]);
-    this.addFace(offset, part, block.left, [
-      [0, 0, -1],
-      [0, 1, -1],
-      lid[3],
-      lid[0]
-    ]);
-    this.addFace(offset, part, block.right, [
-      [1, 1, -1],
-      [1, 0, -1],
-      lid[1],
-      lid[2]
-    ]);
-  }
-
-  addFace(offset, part, face, quad) {
-    const texture = (face & 0x3fff) >>> 0;
-    const rotation = ((face >> 14) >>> 0) * 90;
-    const flip = (face & 0x2000) >>> 0;
-
-    if (!texture) {
-      return;
-    }
-
-    let vertices = [];
-  }
 }
 
-GTA2Map.load = function* load(gl, filename) {
+GTA2Map.load = function* load(gl, filename, getState) {
   let data = null;
 
-  for (let download of downloadAsset(filename)) {
+  const { blobStore } = getState();
+  console.log(blobStore);
+
+  for (let download of downloadAsset(filename, blobStore)) {
     if (download.data) {
       data = download.data;
       break;
@@ -479,15 +417,18 @@ GTA2Map.load = function* load(gl, filename) {
     if (part.result) {
       parts.push(part.result);
     }
+
     yield { progress: part.progress, max: part.max, text: 'Decompressing map' };
   }
 
   const models = [];
 
   for (let part of loadVertexes(parts)) {
-    if (part.vertexes) {
+    if (part.positions && part.positions.length) {
       const model = new Model(gl, gl.TRIANGLES);
-      model.addBuffer('aVertexPosition', Float32Array.from(part.vertexes), 3);
+
+      model.addBuffer('aVertexPosition', Float32Array.from(part.positions), 3);
+      //model.addBuffer('aTexCoord', Float32Array.from(part.texcoords), 3);
       models.push(model);
     }
 

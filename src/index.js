@@ -19,6 +19,7 @@ import Model from './model';
 import GTA2Style from './gta2_style';
 import GTA2Map from './gta2_map';
 import Loaders from './loaders';
+import BlobStore from './blob_store';
 
 /*
 GTA2Map.load('/levels/ste.gmp').then(() => {
@@ -161,8 +162,18 @@ class Game {
       )
     );
 
-    this.loaders.addLoader('map', GTA2Map.load(this.controls.gl, `/levels/${level}.gmp`));
-    // kthis.loaders.addLoader('style', GTA2Style.load(this.controls.gl, `/levels/${level}.sty`));
+    this.loaders.addLoader('blobStore', BlobStore.load('data'));
+
+    this.loaders.addLoader(
+      'map',
+      GTA2Map.load(
+        this.controls.gl,
+        `/levels/${level}.gmp`,
+        () => ({ blobStore: this.items.blobStore })
+      ),
+    );
+
+    // this.loaders.addLoader('style', GTA2Style.load(this.controls.gl, `/levels/${level}.sty`));
   }
 
   setState(state, cb = null) {
