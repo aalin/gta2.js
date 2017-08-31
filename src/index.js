@@ -165,15 +165,18 @@ class Game {
     this.loaders.addLoader('blobStore', BlobStore.load('data'));
 
     this.loaders.addLoader(
+      'style',
+      GTA2Style.load(this.controls.gl, `/levels/${level}.sty`)
+    );
+
+    this.loaders.addLoader(
       'map',
       GTA2Map.load(
         this.controls.gl,
         `/levels/${level}.gmp`,
-        () => ({ blobStore: this.items.blobStore })
+        () => ({ style: this.items.style, blobStore: this.items.blobStore })
       ),
     );
-
-    // this.loaders.addLoader('style', GTA2Style.load(this.controls.gl, `/levels/${level}.sty`));
   }
 
   setState(state, cb = null) {
@@ -228,10 +231,10 @@ class Game {
       zoom: 10.0,
     };
 
-    const x = Math.cos(this.ticks / 1000.0) * 50.0;
+    const x = -50 + Math.cos(this.ticks / 1000.0) * 10.0;
     const y = 20.0;
     const z = 10.0;
-    const [pMatrix, vMatrix] = camera.lookat(gl, [x, y, z], [-50, 50, 0], [0, 0, 1]);
+    const [pMatrix, vMatrix] = camera.lookat(gl, [x, y, z], [20, 20, 0], [0, 0, 1]);
 
     const matrices = {
       p: pMatrix,
@@ -241,7 +244,7 @@ class Game {
 
     if (this.items.map) {
       if (this.items.shader) {
-        this.items.map.draw(gl, this.items.shader, matrices);
+        this.items.map.draw(gl, this.items.shader, matrices, this.items.style);
       }
     }
 
@@ -251,12 +254,12 @@ class Game {
   draw2d() {
     const { ctx, canvas } = this.canvas2d;
 
-    if (!this.state.loadingText) {
+    if (this.state.loadingText) {
+      canvas.style.display = 'block';
+    } else {
       canvas.style.display = 'none';
       return;
     }
-
-    canvas.style.display = 'block';
 
     const radius = 5.0;
     ctx.clearRect(0, 0, canvas.width, canvas.height);

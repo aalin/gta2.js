@@ -73,7 +73,7 @@ function buildTypedArray(numBytes, length) {
     case 4:
       return new Uint32Array(len);
     default:
-      throw `Can't build array with ${numBytes} bytes per element`;
+      throw `Can't build array with ${numBytes} elements`;
   }
 }
 
@@ -174,63 +174,63 @@ export default class BinaryByffer {
     return this._readString(len);
   }
 
-  readArrayLE(bytesPerElement, len) {
-    return this.readArray(bytesPerElement, len, packIntLE);
+  readArrayLE(numBytes, len) {
+    return this.readArray(numBytes, len, packIntLE);
   }
 
-  readArrayBE(bytesPerElement, len) {
-    return this.readArray(bytesPerElement, len, packIntBE);
+  readArrayBE(numBytes, len) {
+    return this.readArray(numBytes, len, packIntBE);
   }
 
-  readArray(bytesPerElement, len, packFn = packIntLE) {
+  readArray(numBytes, len, packFn = packIntLE) {
     const bytes = this._readBytes(len);
 
-    if (bytesPerElement === 1) {
+    if (numBytes === 1) {
       return bytes;
     }
 
-    const result = buildTypedArray(bytesPerElement, len);
+    const result = buildTypedArray(numBytes, len);
 
     for (let i = 0; i < result.length; i++) {
-      const x = i * bytesPerElement;
-      result[i] = packFn(bytes.slice(x, x + bytesPerElement));
+      const x = i * numBytes;
+      result[i] = packFn(bytes.slice(x, x + numBytes));
     }
 
     return result;
   }
 
-  _readIntLE(length) {
-    return packIntLE(this._readBytes(length));
+  _readIntLE(numBytes) {
+    return packIntLE(this._readBytes(numBytes));
   }
 
-  _readIntBE(length) {
-    return packIntBE(this._readBytes(length));
+  _readIntBE(numBytes) {
+    return packIntBE(this._readBytes(numBytes));
   }
 
-  _readString(length) {
-    return uint8arrayToString(this._readBytes(length));
+  _readString(numBytes) {
+    return uint8arrayToString(this._readBytes(numBytes));
   }
 
-  _peekBytes(length) {
-    return this[_data].slice(this[_pos], this[_pos] + length);
+  _peekBytes(numBytes) {
+    return this[_data].slice(this[_pos], this[_pos] + numBytes);
   }
 
-  skip(length) {
-    this.pos += length;
+  skip(numBytes) {
+    this.pos += numBytes;
   }
 
   eof() {
     return this[_pos] >= this.length;
   }
 
-  _readBytes(length) {
+  _readBytes(numBytes) {
     const pos = this.pos;
-    const bytes = this._peekBytes(length);
-    this.skip(length);
+    const bytes = this._peekBytes(numBytes);
+    this.skip(numBytes);
     return bytes;
   }
 
-  inspect(length = 16) {
-    return `[${this.constructor.name} pos=${this.pos} length=${this.length} next=${formatHex(this._peekBytes(length), 1)}]`;
+  inspect(numBytes = 16) {
+    return `[${this.constructor.name} pos=${this.pos} length=${this.length} next=${formatHex(this._peekBytes(numBytes), 1)}]`;
   }
 }

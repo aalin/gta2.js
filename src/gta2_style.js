@@ -45,10 +45,13 @@ function extractColor(integer) {
   return [r, g, b, a];
 }
 
-function* loadTextures(gl, style) {
+let ADDED = false;
+
+function* loadTextures(gl, style, textureIndex) {
   const pageSize = 256 * 256;
-  const pagesPerTexture = 2;
+  const pagesPerTexture = 8;
   const pagesPerTexture2 = pagesPerTexture * pagesPerTexture
+  let textureMap = {};
 
   for(let ii = 0; ii < Math.ceil(62 / pagesPerTexture2); ii++) {
     const { canvas, ctx } = createTextureCanvas(256 * pagesPerTexture);
@@ -65,6 +68,11 @@ function* loadTextures(gl, style) {
             const paletteIndex = style.paletteIndex[tileIndex];
 
             let hasTransparency = false;
+
+            textureMap[tileIndex] = [
+              i * 256 + x * 64 + 0,
+              j * 256 + y * 64 + 0,
+            ];
 
             for(let tileY = 0; tileY < 64; tileY++) {
               for(let tileX = 0; tileX < 64; tileX++) {
@@ -101,14 +109,21 @@ function* loadTextures(gl, style) {
     canvas.id = `canvas-2`;
     canvas.style.position = 'fixed';
     canvas.style.top = canvas.style.right = canvas.style.bottom = canvas.style.left = 0;
-    canvas.style.height = canvas.style.width = '100%';
+    canvas.style.height = canvas.style.width = `${256 * pagesPerTexture}px`;
     canvas.style.zIndex = 2;
 
-    const texture = new Texture(gl, ii, canvas);
-    console.log(texture);
-    // document.body.appendChild(canvas);
+    const texture = new Texture(gl, textureIndex + ii, canvas);
+    console.log(gl.getParameter(gl.MAX_TEXTURE_SIZE));
+    if (!ADDED) {
+      //document.body.appendChild(canvas);
+      //ADDED = true;
+    }
+
+    yield { texture };
     // console.log(canvas);
   }
+
+  yield { textureMap };
 }
 
 function* parseStyle(data) {
@@ -151,12 +166,17 @@ function* parseStyle(data) {
 }
 
 export default class GTA2Style {
-  constructor(attributes) {
-    Object.assign(this, attributes);
+  constructor(textures, textureMap) {
+    this.textures = textures;
+    this.textureMap = textureMap;
+  }
+
+  draw() {
+    //this.textures.each(texture => texture.bind())
   }
 }
 
-GTA2Style.load = function* load(gl, filename) {
+GTA2Style.load = function* load(gl, filename, textureIndex = 1) {
   let data = null;
 
   for (let download of downloadAsset(filename)) {
@@ -179,8 +199,9 @@ GTA2Style.load = function* load(gl, filename) {
   }
 
   const textures = [];
+  let textureMap = {};
 
-  for (let details of loadTextures(gl, style)) {
+  for (let details of loadTextures(gl, style, textureIndex)) {
     if (details._progress) {
       yield { progress: details._progress, max: details._max, text: `Loading textures textures (${details._type})` };
     }
@@ -188,8 +209,13 @@ GTA2Style.load = function* load(gl, filename) {
     if (details.texture) {
       textures.push(details.texture);
     }
+
+    if (details.textureMap) {
+      textureMap = details.textureMap;
+    }
   }
 
-  yield { result: new GTA2Style(style) };
-}
+  console.log("Number of textures", textures.length);
 
+  yield { result: new GTA2Style(textures, textureMap) };
+}

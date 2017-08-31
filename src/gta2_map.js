@@ -57,28 +57,40 @@ function buildLid(slopeType) {
   }
 }
 
-function Vertex(position, texcoord = [0, 0]) {
+function Vertex(position, texcoord = [0, 0], texture = 0) {
   this.position = position;
   this.texcoord = texcoord;
+  this.texture = 0;
 }
 
+const TWW = 1.0 / 32.0;
+const TAA = 0 * TWW;
+const TXX = TAA + TWW;
+
 const TEXCOORDS = [
-  [0.0, 0.0],
-  [1.0, 0.0],
-  [1.0, 1.0],
-  [0.0, 1.0],
+  [TAA, TAA],
+  [TXX, TAA],
+  [TXX, TXX],
+  [TAA, TXX],
 ]
 
-function getFace(face, quad, offset) {
+function getFace(textureMap, offset, face, quad) {
   const texture = (face & 0x3ff) >>> 0;
 
   if (!texture) {
     return [];
   }
 
+  if (!(texture in textureMap)) {
+    throw 'Did not find texture offset in map';
+  }
+
+  const textureOffset = vec2.mul(vec2.create(), textureMap[texture], [1.0 / 256.0, -1.0 / 256.0]);
+
   const vertexes = Array.from({ length: 4 }, (_, i) => {
-    const position = vec3.add([0, 0, 0], quad[i], offset);
-    return new Vertex(position, TEXCOORDS[i]);
+    const position = vec3.add(vec3.create(), quad[i], offset);
+    const texcoords = vec2.add(vec2.create(), TEXCOORDS[i], textureOffset);
+    return new Vertex(position, texcoords);
   });
 
   const flip = (face & 0x2000) >>> 0;
@@ -96,40 +108,38 @@ function getFace(face, quad, offset) {
   return res;
 }
 
-function getBlock(block, offset) {
+function getBlock(block, textureMap, offset) {
   const slopeType = (block.slopeType >> 2) >>> 0;
   const lid = buildLid(slopeType);
 
   //const lid = quad(0, 0, 0);
-  return getFace(block.lid, lid, offset);
-
-  return [
-    getFace(block.lid, lid, offset),
-    getFace(block.bottom, [
+  return flatten([
+    getFace(textureMap, offset, block.lid, lid),
+    getFace(textureMap, offset, block.bottom, [
       [0, 0, -1],
       [1, 0, -1],
       lid[1],
       lid[0]
-    ], offset),
-    getFace(block.top, [
+    ]),
+    getFace(textureMap, offset, block.top, [
       [0, 1, -1],
       [1, 1, -1],
       lid[2],
       lid[3]
-    ], offset),
-    getFace(block.left, [
+    ]),
+    getFace(textureMap, offset, block.left, [
       [0, 0, -1],
       [0, 1, -1],
       lid[3],
       lid[0]
-    ], offset),
-    getFace(block.right, [
+    ]),
+    getFace(textureMap, offset, block.right, [
       [1, 1, -1],
       [1, 0, -1],
       lid[1],
       lid[2]
-    ], offset)
-  ].filter(x => !!x);
+    ]),
+  ]);
 }
 
 function constructLid(slope, numLevels) {
@@ -305,17 +315,42 @@ function quad(x, y, z) {
   ];
 }
 
-function generateVertexes(block, x, y, z) {
-  return getBlock(block, [x, y, z]);
+function generateVertexes(block, textureMap, x, y, z) {
+  return getBlock(block, textureMap, [x, y, z]);
 }
 
-function* loadVertexes(parts) {
+class ArrayWriter {
+  constructor(array) {
+    this._array = array;
+    this._index = 0;
+  }
+
+  get pos() {
+    return this._index;
+  }
+
+  get eof() {
+    return this._index > this._array.length;
+  }
+
+  write(data) {
+    for (let i = 0; i < data.length; i++) {
+      this._array[this._index++] = data[i];
+    }
+  }
+
+  get array() {
+    return new this._array.constructor(this._array.slice(0, this.index));
+  }
+}
+
+function* loadVertexes(parts, textureMap) {
   const size = parts.length;
   let count = 0;
 
-  for (let divider of subdivide(256, 32)) {
-    let positions = [];
-    let texcoords = [];
+  for (let divider of subdivide(256, 16)) {
+    const positions = new ArrayWriter(new Float32Array(256 * 256 * 3));
+    const texcoords = new ArrayWriter(new Float32Array(256 * 256 * 2));
 
     for (let col of divider) {
       const [x, y] = col;
@@ -328,14 +363,26 @@ function* loadVertexes(parts) {
           continue;
         }
 
-        const v = generateVertexes(block, x, y, z);
-        positions = positions.concat(v.map(vs => vs.position));
-        texcoords = texcoords.concat(v.map(vs => vs.texcoord));
-      }
-    }
-    console.log(positions);
+        if (positions.eof) {
+          continue;
+        }
 
-    yield { positions: flatten(positions), texcoords: texcoords, progress: count++ * 256, max: 256*256*2 }
+        const v = generateVertexes(block, textureMap, x, y, z);
+
+        v.forEach((vs) => {
+          positions.write(vs.position);
+          texcoords.write(vs.texcoord);
+        })
+
+      }
+
+      yield { progress: count++ * 256, max: 256 * 256 * 2 };
+    }
+
+    yield { positions: positions.array, texcoords: texcoords.array };
+    if (count > 64) {
+      return;
+    }
   }
 }
 
@@ -377,11 +424,19 @@ class GTA2Map {
     this.models = models;
   }
 
-  draw(gl, shader, matrices) {
+  draw(gl, shader, matrices, style = null) {
     shader.use();
     gl.uniformMatrix4fv(shader.uniform('uPMatrix'), false, matrices.p);
     gl.uniformMatrix4fv(shader.uniform('uVMatrix'), false, matrices.v);
     gl.uniformMatrix4fv(shader.uniform('uMMatrix'), false, matrices.m);
+
+    if (style) {
+      const texture = style.textures[0];
+
+      if (texture) {
+        gl.uniform1i(shader.uniform('uTexture'), texture.index);
+      }
+    }
 
     this.models.forEach((model) => {
       model.draw(shader);
@@ -392,7 +447,7 @@ class GTA2Map {
 GTA2Map.load = function* load(gl, filename, getState) {
   let data = null;
 
-  const { blobStore } = getState();
+  const { blobStore, style } = getState();
   console.log(blobStore);
 
   for (let download of downloadAsset(filename, blobStore)) {
@@ -423,16 +478,19 @@ GTA2Map.load = function* load(gl, filename, getState) {
 
   const models = [];
 
-  for (let part of loadVertexes(parts)) {
+  for (let part of loadVertexes(parts, style.textureMap)) {
     if (part.positions && part.positions.length) {
       const model = new Model(gl, gl.TRIANGLES);
 
-      model.addBuffer('aVertexPosition', Float32Array.from(part.positions), 3);
-      //model.addBuffer('aTexCoord', Float32Array.from(part.texcoords), 3);
+      console.log('creating model, length:', part.positions.length);
+      model.addBuffer('aVertexPosition', part.positions, 3);
+      model.addBuffer('aTexCoord', part.texcoords, 2);
       models.push(model);
     }
 
-    yield { progress: part.progress, max: part.max, text: `Creating map models ${models.length}` };
+    if (part.progress) {
+      yield { progress: part.progress, max: part.max, text: `Creating map models ${models.length}` };
+    }
   }
 
   yield { result: { models } };

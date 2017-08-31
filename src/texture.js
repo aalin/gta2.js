@@ -9,6 +9,7 @@ export default class Texture {
     this.gl = gl;
     this.index = index;
     this.texture = gl.createTexture();
+    console.log('Created texture', index);
 
     gl.activeTexture(gl.TEXTURE0 + index);
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
