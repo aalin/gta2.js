@@ -4,6 +4,7 @@ import { packIntLE } from './binary_buffer';
 import { vec2, vec3 } from 'gl-matrix';
 import BinaryBuffer, { StructReader } from './binary_buffer';
 import Model from './model';
+import IteratorGenerator from './iterator_generator';
 
 let ITERATIONS = 0;
 
@@ -380,9 +381,10 @@ function* loadVertexes(parts, textureMap) {
     }
 
     yield { positions: positions.array, texcoords: texcoords.array };
-    if (count > 64) {
-      return;
-    }
+
+    /*
+    if (count > 64) { return; }
+    */
   }
 }
 
@@ -467,16 +469,21 @@ GTA2Map.load = function* load(gl, filename, getState) {
   }
 
   const parts = [];
+  let i = 0;
 
   for (let part of loadParts(attributes)) {
     if (part.result) {
       parts.push(part.result);
     }
 
-    yield { progress: part.progress, max: part.max, text: 'Decompressing map' };
+    if ((i++ % 10) === 0) {
+      yield { progress: part.progress, max: part.max, text: 'Decompressing map' };
+    }
   }
 
   const models = [];
+
+  i = 0;
 
   for (let part of loadVertexes(parts, style.textureMap)) {
     if (part.positions && part.positions.length) {
@@ -488,7 +495,8 @@ GTA2Map.load = function* load(gl, filename, getState) {
       models.push(model);
     }
 
-    if (part.progress) {
+    if ((part.progress && i++) % 1000 === 0) {
+      console.log(part);
       yield { progress: part.progress, max: part.max, text: `Creating map models ${models.length}` };
     }
   }

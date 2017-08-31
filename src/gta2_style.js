@@ -200,9 +200,10 @@ GTA2Style.load = function* load(gl, filename, textureIndex = 1) {
 
   const textures = [];
   let textureMap = {};
+  let i = 0;
 
   for (let details of loadTextures(gl, style, textureIndex)) {
-    if (details._progress) {
+    if (details._progress && i++ % 4 === 0) {
       yield { progress: details._progress, max: details._max, text: `Loading textures textures (${details._type})` };
     }
 
