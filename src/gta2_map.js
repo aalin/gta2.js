@@ -143,18 +143,18 @@ function getBlock(block, textureMap, offset) {
 }
 
 function constructLid(slope, numLevels) {
-	if(slope == 0) {
+  if(slope == 0) {
     return [
       [0, 0, 0],
       [1, 0, 0],
       [1, 1, 0],
       [0, 1, 0]
     ];
-	}
+  }
 
-	const height = 1.0 / numLevels;
-	const level = slope % numLevels;
-	const low = height * level - height * numLevels;
+  const height = 1.0 / numLevels;
+  const level = slope % numLevels;
+  const low = height * level - height * numLevels;
 
   let lid = [
     [0, 0, low],
@@ -163,27 +163,27 @@ function constructLid(slope, numLevels) {
     [0, 1, low],
   ];
 
-	// this is weird, everything seems to be mirrored and upside down... :/
-	switch (slope / numLevels) {
-		case 0: // up
-			vec3.add(lid[2], lid[2], [0, 0, height]);
-			vec3.add(lid[3], lid[3], [0, 0, height]);
-			break;
-		case 1: // down
-			vec3.add(lid[0], lid[0], [0, 0, height]);
-			vec3.add(lid[1], lid[1], [0, 0, height]);
-			break;
-		case 2: // right
-			vec3.add(lid[0], lid[0], [0, 0, height]);
-			vec3.add(lid[3], lid[3], [0, 0, height]);
-			break;
-		case 3: // left
-			vec3.add(lid[1], lid[1], [0, 0, height]);
-			vec3.add(lid[2], lid[2], [0, 0, height]);
-			break;
-	}
+  // this is weird, everything seems to be mirrored and upside down... :/
+  switch (slope / numLevels) {
+    case 0: // up
+      vec3.add(lid[2], lid[2], [0, 0, height]);
+      vec3.add(lid[3], lid[3], [0, 0, height]);
+      break;
+    case 1: // down
+      vec3.add(lid[0], lid[0], [0, 0, height]);
+      vec3.add(lid[1], lid[1], [0, 0, height]);
+      break;
+    case 2: // right
+      vec3.add(lid[0], lid[0], [0, 0, height]);
+      vec3.add(lid[3], lid[3], [0, 0, height]);
+      break;
+    case 3: // left
+      vec3.add(lid[1], lid[1], [0, 0, height]);
+      vec3.add(lid[2], lid[2], [0, 0, height]);
+      break;
+  }
 
-	return lid;
+  return lid;
 }
 
 function eachSlice(array, size, callback) {

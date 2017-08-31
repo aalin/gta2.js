@@ -12,8 +12,8 @@ function result(buffer, result) {
 
 function getPaletteValue(paletteData, paletteIndex, colorIndex) {
   const pageStart = Math.floor((paletteIndex / 64)) * 64 * 256 * 4;
-	const idx = pageStart + (paletteIndex % 64) + colorIndex * 64;
-	const value = paletteData[idx];
+  const idx = pageStart + (paletteIndex % 64) + colorIndex * 64;
+  const value = paletteData[idx];
   if (value === undefined) {
     throw `value: ${value}`;
   }
