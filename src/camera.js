@@ -17,7 +17,7 @@ export default class Camera {
       [height, ymin, width, xmin] = [width, xmin, height, ymin];
     }
 
-    mat4.ortho(pMatrix, xmin, xmin + width, ymin, ymin + height, -1.0, 100.0);
+    mat4.ortho(pMatrix, xmin, xmin + width, ymin, ymin + height, -1.0, 500.0);
 
     const vMatrix = mat4.create();
 

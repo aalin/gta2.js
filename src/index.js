@@ -1,4 +1,13 @@
 import { mat4, vec3, vec2 } from 'gl-matrix';
+import Camera from './camera';
+import Texture from './texture';
+import Shader from './shader';
+import Model from './model';
+import GTA2Style from './gta2_style';
+import GTA2Map from './gta2_map';
+import Loaders from './loaders';
+import BlobStore from './blob_store';
+import Input from './input';
 
 function initGL(canvas) {
   try {
@@ -12,22 +21,7 @@ function initGL(canvas) {
   }
 }
 
-import Camera from './camera';
-import Texture from './texture';
-import Shader from './shader';
-import Model from './model';
-import GTA2Style from './gta2_style';
-import GTA2Map from './gta2_map';
-import Loaders from './loaders';
-import BlobStore from './blob_store';
-
-/*
-GTA2Map.load('/levels/ste.gmp').then(() => {
-  console.log('Map loaded');
-});
-*/
-
-function createCanvas(zIndex = 0) {
+function createFullscreenCanvas(zIndex = 0) {
   const canvas = document.createElement('canvas');
   canvas.id = `canvas-${zIndex}`;
   canvas.style.position = 'fixed';
@@ -44,57 +38,14 @@ function deg2rad(deg) {
   return deg * Math.PI / 180.0;
 }
 
-class Input {
-  constructor() {
-    this.keys = new Set();
-
-    window.addEventListener('keydown', (e) => {
-      e.preventDefault();
-      this.keys.add(e.keyCode);
-    });
-
-    window.addEventListener('keyup', (e) => {
-      e.preventDefault();
-      this.keys.delete(e.keyCode);
-    });
-  }
-
-  isDown(keyCode) {
-    return this.keys.has(keyCode);
-  }
-}
-
 const KEY_W = 87;
 const KEY_A = 65;
 const KEY_S = 83;
 const KEY_D = 68;
 const KEY_SPACE = 32;
 
-function update(state, step, input) {
-  let xAdd = 0;
-  let yAdd = 0;
-  const speed = 0.002;
-  const delta = step - (state.step || step);
-
-  if (input.isDown(KEY_W)) { yAdd--; }
-  if (input.isDown(KEY_S)) { yAdd++; }
-  if (input.isDown(KEY_A)) { xAdd--; }
-  if (input.isDown(KEY_D)) { xAdd++; }
-
-  const playerPos = [0, 0];
-
-  return Object.assign({}, state, {
-    x: playerPos[0],
-    y: playerPos[1],
-    delta,
-    step,
-    ortho: false, // Math.sin(step / 1000.0) > 0.0,
-    zoom: 50 + Math.sin(step / 5000.0) * 40.0
-  });
-}
-
 function setupControls() {
-  const canvas = createCanvas(0);
+  const canvas = createFullscreenCanvas(0);
   const gl = initGL(canvas);
   const input = new Input();
   const camera = new Camera();
@@ -108,7 +59,7 @@ function setupControls() {
 }
 
 function setupTextCanvas() {
-  const canvas = createCanvas(1);
+  const canvas = createFullscreenCanvas(1);
   const ctx = canvas.getContext('2d');
 
   return { canvas, ctx }
@@ -231,10 +182,25 @@ class Game {
       zoom: 10.0,
     };
 
-    const x = -50 + Math.cos(this.ticks / 1000.0) * 10.0;
-    const y = 20.0;
-    const z = 10.0;
-    const [pMatrix, vMatrix] = camera.lookat(gl, [x, y, z], [20, 20, 0], [0, 0, 1]);
+    const t = this.ticks / 2000.0;
+
+    const eye = [
+      -50 + Math.cos(t) * 50.0,
+      50 + Math.sin(t) * 50.0,
+      10.0
+    ];
+
+    const lookat = [
+      -50 + Math.cos(t) * 10.0,
+      50 + Math.sin(t) * 10.0,
+      0.0,
+    ];
+
+    const [pMatrix, vMatrix] = camera.lookat(gl,
+      eye,
+      lookat,
+      [0, 0, 1]
+    );
 
     const matrices = {
       p: pMatrix,

@@ -49,9 +49,9 @@ let ADDED = false;
 
 function* loadTextures(gl, style, textureIndex) {
   const pageSize = 256 * 256;
-  const pagesPerTexture = 8;
+  const pagesPerTexture = 4;
   const pagesPerTexture2 = pagesPerTexture * pagesPerTexture
-  let textureMap = {};
+  const textureMap = [];
 
   for(let ii = 0; ii < Math.ceil(62 / pagesPerTexture2); ii++) {
     const { canvas, ctx } = createTextureCanvas(256 * pagesPerTexture);
@@ -69,10 +69,10 @@ function* loadTextures(gl, style, textureIndex) {
 
             let hasTransparency = false;
 
-            textureMap[tileIndex] = [
-              i * 256 + x * 64 + 0,
-              j * 256 + y * 64 + 0,
-            ];
+            textureMap.push([
+              (j * 256 + y * 64) / 2048.0,
+              (i * 256 + x * 64) / 2048.0,
+            ]);
 
             for(let tileY = 0; tileY < 64; tileY++) {
               for(let tileX = 0; tileX < 64; tileX++) {
@@ -93,7 +93,7 @@ function* loadTextures(gl, style, textureIndex) {
               }
             }
 
-            yield { _message: "hatt", _progress: pageNum, _max: 62 };
+            yield { _type: "hatt", _progress: pageNum, _max: 62 };
 
             //yield { texture };
           }
@@ -176,6 +176,8 @@ export default class GTA2Style {
   }
 }
 
+import Counter from './counter';
+
 GTA2Style.load = function* load(gl, filename, textureIndex = 1) {
   let data = null;
 
@@ -200,11 +202,11 @@ GTA2Style.load = function* load(gl, filename, textureIndex = 1) {
 
   const textures = [];
   let textureMap = {};
-  let i = 0;
+  const counter = new Counter();
 
   for (let details of loadTextures(gl, style, textureIndex)) {
-    if (details._progress && i++ % 4 === 0) {
-      yield { progress: details._progress, max: details._max, text: `Loading textures textures (${details._type})` };
+    if (details._progress && counter.update()) {
+      yield { progress: details._progress, max: details._max, text: `Loading textures (${details._type})` };
     }
 
     if (details.texture) {

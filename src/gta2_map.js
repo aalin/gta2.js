@@ -5,6 +5,7 @@ import { vec2, vec3 } from 'gl-matrix';
 import BinaryBuffer, { StructReader } from './binary_buffer';
 import Model from './model';
 import IteratorGenerator from './iterator_generator';
+import Counter from './counter';
 
 let ITERATIONS = 0;
 
@@ -65,7 +66,7 @@ function Vertex(position, texcoord = [0, 0], texture = 0) {
 }
 
 const TWW = 1.0 / 32.0;
-const TAA = 0 * TWW;
+const TAA = -TWW;
 const TXX = TAA + TWW;
 
 const TEXCOORDS = [
@@ -86,7 +87,7 @@ function getFace(textureMap, offset, face, quad) {
     throw 'Did not find texture offset in map';
   }
 
-  const textureOffset = vec2.mul(vec2.create(), textureMap[texture], [1.0 / 256.0, -1.0 / 256.0]);
+  const textureOffset = textureMap[texture];
 
   const vertexes = Array.from({ length: 4 }, (_, i) => {
     const position = vec3.add(vec3.create(), quad[i], offset);
@@ -331,7 +332,11 @@ class ArrayWriter {
   }
 
   get eof() {
-    return this._index > this._array.length;
+    return this._index >= this._array.length;
+  }
+
+  reset() {
+    this._index = 0;
   }
 
   write(data) {
@@ -341,7 +346,7 @@ class ArrayWriter {
   }
 
   get array() {
-    return new this._array.constructor(this._array.slice(0, this.index));
+    return new this._array.constructor(this._array.slice(0, this._index));
   }
 }
 
@@ -349,22 +354,25 @@ function* loadVertexes(parts, textureMap) {
   const size = parts.length;
   let count = 0;
 
-  for (let divider of subdivide(256, 16)) {
-    const positions = new ArrayWriter(new Float32Array(256 * 256 * 3));
-    const texcoords = new ArrayWriter(new Float32Array(256 * 256 * 2));
+  const positions = new ArrayWriter(new Float32Array(256 * 256 * 3 * 12));
+  const texcoords = new ArrayWriter(new Float32Array(256 * 256 * 2 * 12));
+
+  for (let divider of subdivide(256, 32)) {
+    positions.reset();
+    texcoords.reset();
 
     for (let col of divider) {
       const [x, y] = col;
       const column = parts[y][x];
 
       for (let z = 0; z < column.length; z++) {
+        if (positions.eof) {
+          break;
+        }
+
         const block = column[z];
 
         if (block === undefined) {
-          continue;
-        }
-
-        if (positions.eof) {
           continue;
         }
 
@@ -377,10 +385,10 @@ function* loadVertexes(parts, textureMap) {
 
       }
 
-      yield { progress: count++ * 256, max: 256 * 256 * 2 };
+      // yield { progress: count++ * 256, max: 256 * 256 * 8 };
     }
 
-    yield { positions: positions.array, texcoords: texcoords.array };
+    yield { progress: count++, max: 256 * 256, positions: positions.array, texcoords: texcoords.array };
 
     /*
     if (count > 64) { return; }
@@ -469,21 +477,21 @@ GTA2Map.load = function* load(gl, filename, getState) {
   }
 
   const parts = [];
-  let i = 0;
+  const counter = new Counter();
 
   for (let part of loadParts(attributes)) {
     if (part.result) {
       parts.push(part.result);
     }
 
-    if ((i++ % 10) === 0) {
+    if (counter.update) {
       yield { progress: part.progress, max: part.max, text: 'Decompressing map' };
     }
   }
 
   const models = [];
-
-  i = 0;
+  counter.reset(100);
+  console.log('textureMap', style.textureMap);
 
   for (let part of loadVertexes(parts, style.textureMap)) {
     if (part.positions && part.positions.length) {
@@ -495,8 +503,7 @@ GTA2Map.load = function* load(gl, filename, getState) {
       models.push(model);
     }
 
-    if ((part.progress && i++) % 1000 === 0) {
-      console.log(part);
+    if (part.progress && counter.update()) {
       yield { progress: part.progress, max: part.max, text: `Creating map models ${models.length}` };
     }
   }
