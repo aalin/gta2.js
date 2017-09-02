@@ -75,8 +75,8 @@ const TEXCOORDS = [
   [TAA, TXX],
 ];
 
-function getFace(offset, face, quad) {
-  const texture = (face & 0x3ff) >>> 0;
+function getFace(offset, face, quad, isDown = false) {
+  const texture = face & 0x3ff;
 
   if (!texture) {
     return [];
@@ -107,7 +107,7 @@ function getFace(offset, face, quad) {
   const flipMat = mat2d.create();
   mat2d.scale(flipMat, flipMat, [1.0, -1.0]);
 
-  vertexes.forEach((vertex) => {
+  vertexes.forEach((vertex, i) => {
     vec2.add(vertex.texcoord, vertex.texcoord, [-TWW / 2, -TWW / 2]);
     vec2.transformMat2d(vertex.texcoord, vertex.texcoord, rotationMat);
     vec2.add(vertex.texcoord, vertex.texcoord, [TWW / 2, TWW / 2]);
@@ -117,6 +117,11 @@ function getFace(offset, face, quad) {
     }
 
     vec2.add(vertex.texcoord, vertex.texcoord, textureOffset);
+
+    if (isDown) {
+      vec2.add(vertex.texcoord, [0, 0], TEXCOORDS[i]);
+    }
+
     vec3.add(vertex.position, vertex.position, offset);
   });
 
@@ -139,17 +144,11 @@ function getBlock(block, offset) {
   //const lid = quad(0, 0, 0);
   return flatten([
     getFace(offset, block.lid, lid),
-    getFace(offset, block.bottom, [
-      [0, 0, -1],
-      [1, 0, -1],
-      lid[1],
-      lid[0]
-    ]),
     getFace(offset, block.top, [
       [0, 1, -1],
       [1, 1, -1],
       lid[2],
-      lid[3]
+      lid[3],
     ]),
     getFace(offset, block.left, [
       [0, 0, -1],
@@ -163,6 +162,12 @@ function getBlock(block, offset) {
       lid[1],
       lid[2]
     ]),
+    getFace(offset, block.bottom, [
+      [0, 0, -1],
+      [1, 0, -1],
+      lid[1],
+      lid[0],
+    ], true),
   ]);
 }
 
@@ -303,8 +308,8 @@ function* loadVertexes(parts) {
   const size = parts.length;
   let count = 0;
 
-  const positions = new ArrayWriter(new Float32Array(256 * 256 * 3 * 12));
-  const texcoords = new ArrayWriter(new Float32Array(256 * 256 * 2 * 12));
+  const positions = new ArrayWriter(new Float32Array(256 * 256 * 3 * 20));
+  const texcoords = new ArrayWriter(new Float32Array(256 * 256 * 2 * 20));
 
   for (let divider of subdivide(256, 32)) {
     positions.reset();
@@ -317,6 +322,7 @@ function* loadVertexes(parts) {
       for (let z = 0; z < column.length; z++) {
         // for (let z = column.length - 1; z >= 0; z--) {
         if (positions.eof) {
+          alert('eof');
           break;
         }
 
@@ -357,29 +363,28 @@ function* loadParts(attributes) {
     for (let x = 0; x < 256; x++) {
       part[x] = [];
 
-      const columnIndex = attributes.base[y * 256 + x];
+      const columnIndex = attributes.base[y * 256 + x] * 4;
 
-      colData.setPos(columnIndex * 4);
+      colData.setPos(columnIndex);
+
       const colInfo = colData.readStruct(ColInfo);
 
-      // const height = attributes.columns[columnIndex] & 0xff;
-      // const offset = ((attributes.columns[columnIndex] & 0xff00) >> 8) >>> 0;
       const height = colInfo.height;
       const offset = colInfo.offset;
 
-      for (var z = 0; z < height; z++) {
+      for (var z = 0; z < colInfo.height; z++) {
         if (z >= offset) {
-          // const blockIndex = attributes.columns[columnIndex + z - offset];
-          const block = attributes.blocks[colInfo.blockd[z - offset]];
+          const blockIndex = colInfo.blockd[z - colInfo.offset];
+          const block = attributes.blocks[blockIndex];
 
           if (block) {
             part[x][z] = block;
           }
         }
       }
-
     }
-      yield { progress: y, max: 256, result: part };
+
+    yield { progress: y, max: 256, result: part };
   }
 }
 
