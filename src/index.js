@@ -160,9 +160,21 @@ class Game {
   update() {
     this.loaders.update();
 
-    if (this.controls.input.isDown(KEY_SPACE)) {
+    const { input } = this.controls;
+
+    if (input.isDown(KEY_SPACE)) {
       this.stop();
     }
+
+    let forward = this.state.forward || 0.0;
+    let stride = this.state.stride || 0.0;
+
+    if (input.isDown(KEY_W)) { forward += 1.0; }
+    if (input.isDown(KEY_S)) { forward -= 1.0; }
+    if (input.isDown(KEY_A)) { stride -= 1.0; }
+    if (input.isDown(KEY_D)) { stride == 1.0; }
+
+    this.setState({ forward, stride });
 
     this._updateState();
   }

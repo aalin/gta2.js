@@ -84,17 +84,10 @@ function getFace(offset, face, quad) {
 
   const textureOffset = vec2.create();
 
-  if (offset[2] < 1) {
-    vec2.add(textureOffset, [0, 0], [
-      (0 * 64) / 2048.0,
-      (19 * 64) / 2048.0,
-    ]);
-  } else {
-    vec2.add(textureOffset, [0, 0], [
-      (Math.floor(texture % 32) * 64) / 2048.0,
-      (Math.floor(texture / 32) * 64) / 2048.0,
-    ]);
-  }
+  vec2.add(textureOffset, [0, 0], [
+    (Math.floor(texture % 32) * 64) / 2048.0,
+    (Math.floor(texture / 32) * 64) / 2048.0,
+  ]);
 
   const vertexes = Array.from({ length: 4 }, (_, i) => {
     const position = vec3.create();
@@ -109,10 +102,19 @@ function getFace(offset, face, quad) {
   const rotation = ((face >> 14) >>> 0) * 90;
 
   const rotationMat = mat2d.create();
-  mat2d.rotate(rotationMat, rotationMat, rotation * Math.PI / 180.0);
+  mat2d.rotate(rotationMat, rotationMat, -rotation * Math.PI / 180.0);
+
+  const flipMat = mat2d.create();
+  mat2d.scale(flipMat, flipMat, [1.0, -1.0]);
 
   vertexes.forEach((vertex) => {
+    vec2.add(vertex.texcoord, vertex.texcoord, [-TWW / 2, -TWW / 2]);
     vec2.transformMat2d(vertex.texcoord, vertex.texcoord, rotationMat);
+    vec2.add(vertex.texcoord, vertex.texcoord, [TWW / 2, TWW / 2]);
+
+    if (flip) {
+      vec2.transformMat2d(vertex.texcoord, vertex.texcoord, flipMat);
+    }
 
     vec2.add(vertex.texcoord, vertex.texcoord, textureOffset);
     vec3.add(vertex.position, vertex.position, offset);
@@ -313,6 +315,7 @@ function* loadVertexes(parts) {
       const column = parts[y][x];
 
       for (let z = 0; z < column.length; z++) {
+        // for (let z = column.length - 1; z >= 0; z--) {
         if (positions.eof) {
           break;
         }
@@ -323,7 +326,7 @@ function* loadVertexes(parts) {
           continue;
         }
 
-        const v = getBlock(block, [x, y, z], z);
+        const v = getBlock(block, [x, y, z]);
 
         v.forEach((vs) => {
           positions.write(vs.position);
@@ -370,7 +373,7 @@ function* loadParts(attributes) {
           const block = attributes.blocks[colInfo.blockd[z - offset]];
 
           if (block) {
-            part[x][z + offset] = block;
+            part[x][z] = block;
           }
         }
       }

@@ -64,8 +64,6 @@ function* loadTextures(gl, style, textureIndex) {
 
     const paletteIndex = style.paletteIndex[tileIndex];
 
-    let hasTransparency = false;
-
     const x = 64 * (tileIndex % 4);
     const y = 64 * (Math.floor(tileIndex / 4) % 4);
 
@@ -80,7 +78,6 @@ function* loadTextures(gl, style, textureIndex) {
         const c = style.tiles[pageOffset + idx];
 
         if (!c) {
-          hasTransparency = true;
           putPixel(ctx, px, py, [0, 0, 0, 0]);
         } else {
           const rgba = getPaletteValue(style.physicalPalettes, paletteIndex, c);
