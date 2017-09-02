@@ -118,9 +118,11 @@ function getFace(offset, face, quad, isDown = false) {
 
     vec2.add(vertex.texcoord, vertex.texcoord, textureOffset);
 
+    /*
     if (isDown) {
       vec2.add(vertex.texcoord, [0, 0], TEXCOORDS[i]);
     }
+    */
 
     vec3.add(vertex.position, vertex.position, offset);
   });
@@ -344,11 +346,7 @@ function* loadVertexes(parts) {
       // yield { progress: count++ * 256, max: 256 * 256 * 8 };
     }
 
-    yield { progress: count++, max: 256 * 256, positions: positions.array, texcoords: texcoords.array };
-
-    /*
-    if (count > 64) { return; }
-    */
+    yield { progress: count++, max: 64, positions: positions.array, texcoords: texcoords.array };
   }
 }
 
@@ -356,12 +354,11 @@ function* loadParts(attributes) {
   const colData = new BinaryBuffer(attributes.columns);
 
   for (let y = 0; y < 256; y++) {
-    const part = [];
+    const part = Array.from({ length: 256 });
 
     yield { progress: y, max: 256 };
 
     for (let x = 0; x < 256; x++) {
-      part[x] = [];
 
       const columnIndex = attributes.base[y * 256 + x] * 4;
 
@@ -369,11 +366,10 @@ function* loadParts(attributes) {
 
       const colInfo = colData.readStruct(ColInfo);
 
-      const height = colInfo.height;
-      const offset = colInfo.offset;
+      part[x] = Array.from({ length: colInfo.height });
 
       for (var z = 0; z < colInfo.height; z++) {
-        if (z >= offset) {
+        if (z >= colInfo.offset) {
           const blockIndex = colInfo.blockd[z - colInfo.offset];
           const block = attributes.blocks[blockIndex];
 
