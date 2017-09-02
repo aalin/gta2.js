@@ -179,27 +179,27 @@ class Game {
     const { canvas, gl, camera, input } = this.controls;
 
     const cameraState = {
-      zoom: 10.0,
+      zoom: 10.0
     };
 
-    const t = this.ticks / 2000.0;
+    const t = this.ticks / 5000.0;
 
     const eye = [
       -50 + Math.cos(t) * 50.0,
       50 + Math.sin(t) * 50.0,
-      10.0
+      20.0
     ];
 
     const lookat = [
-      -50 + Math.cos(t) * 10.0,
-      50 + Math.sin(t) * 10.0,
+      -50 + Math.cos(t) * 50.0,
+      50 + Math.sin(t) * 50.0,
       0.0,
     ];
 
     const [pMatrix, vMatrix] = camera.lookat(gl,
       eye,
       lookat,
-      [0, 0, 1]
+      [0, 1, 0]
     );
 
     const matrices = {

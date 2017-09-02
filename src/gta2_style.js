@@ -48,82 +48,61 @@ function extractColor(integer) {
 let ADDED = false;
 
 function* loadTextures(gl, style, textureIndex) {
-  const pageSize = 256 * 256;
-  const pagesPerTexture = 4;
-  const pagesPerTexture2 = pagesPerTexture * pagesPerTexture
-  const textureMap = [];
+  const textureSize = 4096;
+  const pageSize = 256;
+  const divisor = 992;
+  const squared = Math.ceil(Math.sqrt(992));
+  const tileSize = 64;
 
-  for(let ii = 0; ii < Math.ceil(62 / pagesPerTexture2); ii++) {
-    const { canvas, ctx } = createTextureCanvas(256 * pagesPerTexture);
-    let allEmpty = true;
+  const { canvas, ctx } = createTextureCanvas(2048);
 
-    for (let i = 0; i < pagesPerTexture; i++) {
-      for (let j = 0; j < pagesPerTexture; j++) {
-        const pageNum = ii * pagesPerTexture2 + i * pagesPerTexture + j;
-        const pageOffset = pageSize * pageNum;
+  for (let tileIndex = 0; tileIndex < 992; tileIndex++) {
+    const i = Math.floor(tileIndex % 32) * 64;
+    const j = Math.floor(tileIndex / 32) * 64;
+    const pageNum = Math.floor(tileIndex / 16);
+    const pageOffset = 256 * 256 * pageNum;
 
-        for(let y = 0; y < 4; y++) {
-          for(let x = 0; x < 4; x++) {
-            const tileIndex = pageNum * 16 + y * 4 + x;
-            const paletteIndex = style.paletteIndex[tileIndex];
+    const paletteIndex = style.paletteIndex[tileIndex];
 
-            let hasTransparency = false;
+    let hasTransparency = false;
 
-            textureMap.push([
-              (j * 256 + y * 64) / 2048.0,
-              (i * 256 + x * 64) / 2048.0,
-            ]);
+    const x = 64 * (tileIndex % 4);
+    const y = 64 * (Math.floor(tileIndex / 4) % 4);
 
-            for(let tileY = 0; tileY < 64; tileY++) {
-              for(let tileX = 0; tileX < 64; tileX++) {
-                const idx = (y * 64 + tileY) * 256 + x * 64 + tileX;
-                const c = style.tiles[pageOffset + idx];
+    for(let tileY = 0; tileY < 64; tileY++) {
+      for(let tileX = 0; tileX < 64; tileX++) {
+        const paletteIndex = style.paletteIndex[tileIndex];
 
-                const px = i * 256 + x * 64 + tileX;
-                const py = j * 256 + y * 64 + tileY;
+        const px = i + tileX;
+        const py = j + tileY;
 
-                if (!c) {
-                  hasTransparency = true;
-                  putPixel(ctx, px, py, [0, 0, 0, 0]);
-                } else {
-                  allEmpty = false;
-                  const rgba = (getPaletteValue(style.physicalPalettes, paletteIndex, c) | 0xff000000) >>> 0;
-                  putPixel(ctx, px, py, extractColor(rgba));
-                }
-              }
-            }
+        const idx = (y + tileY) * 256 + x + tileX;
+        const c = style.tiles[pageOffset + idx];
 
-            yield { _type: "hatt", _progress: pageNum, _max: 62 };
-
-            //yield { texture };
-          }
+        if (!c) {
+          hasTransparency = true;
+          putPixel(ctx, px, py, [0, 0, 0, 0]);
+        } else {
+          const rgba = getPaletteValue(style.physicalPalettes, paletteIndex, c);
+          putPixel(ctx, px, py, extractColor(rgba | 0xff000000));
         }
       }
-
-      if (allEmpty) {
-        console.error('All textures are empty');
-        break;
-      }
     }
 
-    canvas.id = `canvas-2`;
-    canvas.style.position = 'fixed';
-    canvas.style.top = canvas.style.right = canvas.style.bottom = canvas.style.left = 0;
-    canvas.style.height = canvas.style.width = `${256 * pagesPerTexture}px`;
-    canvas.style.zIndex = 2;
-
-    const texture = new Texture(gl, textureIndex + ii, canvas);
-    console.log(gl.getParameter(gl.MAX_TEXTURE_SIZE));
-    if (!ADDED) {
-      //document.body.appendChild(canvas);
-      //ADDED = true;
-    }
-
-    yield { texture };
-    // console.log(canvas);
+    yield { _type: `${tileIndex}/992`, _progress: tileIndex, _max: 992 };
   }
 
-  yield { textureMap };
+  canvas.id = `canvas-2`;
+  canvas.style.position = 'fixed';
+  canvas.style.top = canvas.style.right = canvas.style.bottom = canvas.style.left = 0;
+  canvas.style.height = canvas.style.width = `${textureSize}px`;
+  canvas.style.zIndex = 2;
+
+  const texture = new Texture(gl, textureIndex, canvas);
+  console.log('gl.MAX_TEXTURE_SIZE', gl.getParameter(gl.MAX_TEXTURE_SIZE));
+  // document.body.appendChild(canvas);
+
+  yield { texture };
 }
 
 function* parseStyle(data) {
@@ -166,9 +145,8 @@ function* parseStyle(data) {
 }
 
 export default class GTA2Style {
-  constructor(textures, textureMap) {
+  constructor(textures) {
     this.textures = textures;
-    this.textureMap = textureMap;
   }
 
   draw() {
@@ -201,7 +179,6 @@ GTA2Style.load = function* load(gl, filename, textureIndex = 1) {
   }
 
   const textures = [];
-  let textureMap = {};
   const counter = new Counter();
 
   for (let details of loadTextures(gl, style, textureIndex)) {
@@ -212,13 +189,9 @@ GTA2Style.load = function* load(gl, filename, textureIndex = 1) {
     if (details.texture) {
       textures.push(details.texture);
     }
-
-    if (details.textureMap) {
-      textureMap = details.textureMap;
-    }
   }
 
   console.log("Number of textures", textures.length);
 
-  yield { result: new GTA2Style(textures, textureMap) };
+  yield { result: new GTA2Style(textures) };
 }

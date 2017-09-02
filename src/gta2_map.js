@@ -1,7 +1,7 @@
 import { downloadAsset } from './utils';
 import loadChunks from './load_chunks';
 import { packIntLE } from './binary_buffer';
-import { vec2, vec3 } from 'gl-matrix';
+import { vec2, vec3, mat2d } from 'gl-matrix';
 import BinaryBuffer, { StructReader } from './binary_buffer';
 import Model from './model';
 import IteratorGenerator from './iterator_generator';
@@ -59,14 +59,13 @@ function buildLid(slopeType) {
   }
 }
 
-function Vertex(position, texcoord = [0, 0], texture = 0) {
+function Vertex(position, texcoord = [0, 0]) {
   this.position = position;
   this.texcoord = texcoord;
-  this.texture = 0;
 }
 
 const TWW = 1.0 / 32.0;
-const TAA = -TWW;
+const TAA = 0.0;
 const TXX = TAA + TWW;
 
 const TEXCOORDS = [
@@ -74,29 +73,50 @@ const TEXCOORDS = [
   [TXX, TAA],
   [TXX, TXX],
   [TAA, TXX],
-]
+];
 
-function getFace(textureMap, offset, face, quad) {
+function getFace(offset, face, quad) {
   const texture = (face & 0x3ff) >>> 0;
 
   if (!texture) {
     return [];
   }
 
-  if (!(texture in textureMap)) {
-    throw 'Did not find texture offset in map';
+  const textureOffset = vec2.create();
+
+  if (offset[2] < 1) {
+    vec2.add(textureOffset, [0, 0], [
+      (0 * 64) / 2048.0,
+      (19 * 64) / 2048.0,
+    ]);
+  } else {
+    vec2.add(textureOffset, [0, 0], [
+      (Math.floor(texture % 32) * 64) / 2048.0,
+      (Math.floor(texture / 32) * 64) / 2048.0,
+    ]);
   }
 
-  const textureOffset = textureMap[texture];
-
   const vertexes = Array.from({ length: 4 }, (_, i) => {
-    const position = vec3.add(vec3.create(), quad[i], offset);
-    const texcoords = vec2.add(vec2.create(), TEXCOORDS[i], textureOffset);
-    return new Vertex(position, texcoords);
+    const position = vec3.create();
+    const texcoord = vec2.create();
+    vec3.add(position, position, quad[i]);
+    vec2.add(texcoord, texcoord, TEXCOORDS[i]);
+
+    return new Vertex(position, texcoord);
   });
 
   const flip = (face & 0x2000) >>> 0;
   const rotation = ((face >> 14) >>> 0) * 90;
+
+  const rotationMat = mat2d.create();
+  mat2d.rotate(rotationMat, rotationMat, rotation * Math.PI / 180.0);
+
+  vertexes.forEach((vertex) => {
+    vec2.transformMat2d(vertex.texcoord, vertex.texcoord, rotationMat);
+
+    vec2.add(vertex.texcoord, vertex.texcoord, textureOffset);
+    vec3.add(vertex.position, vertex.position, offset);
+  });
 
   const res = [
     vertexes[0],
@@ -110,32 +130,32 @@ function getFace(textureMap, offset, face, quad) {
   return res;
 }
 
-function getBlock(block, textureMap, offset) {
+function getBlock(block, offset) {
   const slopeType = (block.slopeType >> 2) >>> 0;
   const lid = buildLid(slopeType);
 
   //const lid = quad(0, 0, 0);
   return flatten([
-    getFace(textureMap, offset, block.lid, lid),
-    getFace(textureMap, offset, block.bottom, [
+    getFace(offset, block.lid, lid),
+    getFace(offset, block.bottom, [
       [0, 0, -1],
       [1, 0, -1],
       lid[1],
       lid[0]
     ]),
-    getFace(textureMap, offset, block.top, [
+    getFace(offset, block.top, [
       [0, 1, -1],
       [1, 1, -1],
       lid[2],
       lid[3]
     ]),
-    getFace(textureMap, offset, block.left, [
+    getFace(offset, block.left, [
       [0, 0, -1],
       [0, 1, -1],
       lid[3],
       lid[0]
     ]),
-    getFace(textureMap, offset, block.right, [
+    getFace(offset, block.right, [
       [1, 1, -1],
       [1, 0, -1],
       lid[1],
@@ -206,7 +226,9 @@ function* parseMap(data) {
 
         yield { columnWords };
 
-        yield { columns: buffer.read32arrayLE(columnWords) };
+        console.log('column words', columnWords);
+        yield { columns: buffer.read8arrayLE(columnWords * 4) };
+        console.log("POSITION", buffer.pos);
 
         const numBlocks = buffer.read32LE();
 
@@ -229,77 +251,6 @@ function* parseMap(data) {
 let ID = 0;
 let lastOffset = 0;
 
-function loadCell(x, y, attributes, colData) {
-  const offsetIndex = y * 256 + x;
-  const offset = attributes.base[offsetIndex];
-
-  if (offset === undefined) {
-    console.error(`Could not find offset at index ${offsetIndex}`);
-    return;
-  }
-
-  if (offset > attributes.columns.length) {
-    console.error(`Offset is out of bounds (${offset} > ${attributes.columns.length})`);
-    return;
-  }
-
-  if (offset >= colData.length) {
-    return;
-  }
-
-  colData.setPos(offset).inspect();
-  const column = colData.readStruct(ColInfo);
-
-  const blocks = [];
-
-  for (let z = 0; z < 8; z++) {
-    if (z < column.height - column.offset) {
-      const block = loadBlock(x, y, z, attributes, column);
-
-      if (block) {
-        blocks.push(block);
-      }
-    }
-  }
-
-  return blocks;
-}
-
-function loadBlock(x, y, z, attributes, column) {
-  const blockIndex = column.blockd[z];
-
-  const height = column.height - column.offset;
-  // console.log(blockIndex);
-
-  if (blockIndex === undefined) {
-    console.error("blockIndex is undefined", x, y, z, column.blockd);
-    throw "blockIndex is undefined";
-    return;
-  }
-
-  if (blockIndex > attributes.blocks.length) {
-    //console.error(`blockIndex is out of bounds (${blockIndex} > ${attributes.blocks.length})`);
-    return;
-  }
-
-  const block = attributes.blocks[blockIndex];
-
-  // console.log(blockIndex, column, attributes.blocks.length, block);
-
-  return new Block(column, block, [x, y, z + column.offset]);
-}
-
-function loadPart(colData, attributes, y) {
-  const cells = [];
-
-  for (let x = 0; x < 256; x++) {
-    const cell = loadCell(x, y, attributes, colData);
-    cells.push(cell);
-  }
-
-  return cells;
-}
-
 function flatten(a) {
   if (a instanceof Array) {
     return a.reduce((acc, e) => acc.concat(flatten(e)), []);
@@ -315,10 +266,6 @@ function quad(x, y, z) {
     [x+1, y+1, z],
     [x+1, y, z],
   ];
-}
-
-function generateVertexes(block, textureMap, x, y, z) {
-  return getBlock(block, textureMap, [x, y, z]);
 }
 
 class ArrayWriter {
@@ -350,7 +297,7 @@ class ArrayWriter {
   }
 }
 
-function* loadVertexes(parts, textureMap) {
+function* loadVertexes(parts) {
   const size = parts.length;
   let count = 0;
 
@@ -376,7 +323,7 @@ function* loadVertexes(parts, textureMap) {
           continue;
         }
 
-        const v = generateVertexes(block, textureMap, x, y, z);
+        const v = getBlock(block, [x, y, z], z);
 
         v.forEach((vs) => {
           positions.write(vs.position);
@@ -408,22 +355,28 @@ function* loadParts(attributes) {
       part[x] = [];
 
       const columnIndex = attributes.base[y * 256 + x];
-      const height = attributes.columns[columnIndex] & 0xff;
-      const offset = (attributes.columns[columnIndex] & 0xff00) >> 8;
+
+      colData.setPos(columnIndex * 4);
+      const colInfo = colData.readStruct(ColInfo);
+
+      // const height = attributes.columns[columnIndex] & 0xff;
+      // const offset = ((attributes.columns[columnIndex] & 0xff00) >> 8) >>> 0;
+      const height = colInfo.height;
+      const offset = colInfo.offset;
 
       for (var z = 0; z < height; z++) {
         if (z >= offset) {
-          const blockIndex = attributes.columns[columnIndex + z - offset];
-          const block = attributes.blocks[blockIndex];
+          // const blockIndex = attributes.columns[columnIndex + z - offset];
+          const block = attributes.blocks[colInfo.blockd[z - offset]];
 
           if (block) {
             part[x][z + offset] = block;
           }
         }
       }
-    }
 
-    yield { progress: y, max: 256, result: part };
+    }
+      yield { progress: y, max: 256, result: part };
   }
 }
 
@@ -490,10 +443,9 @@ GTA2Map.load = function* load(gl, filename, getState) {
   }
 
   const models = [];
-  counter.reset(100);
-  console.log('textureMap', style.textureMap);
+  counter.reset(10);
 
-  for (let part of loadVertexes(parts, style.textureMap)) {
+  for (let part of loadVertexes(parts)) {
     if (part.positions && part.positions.length) {
       const model = new Model(gl, gl.TRIANGLES);
 
