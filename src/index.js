@@ -54,6 +54,7 @@ function setupControls() {
   gl.enable(gl.DEPTH_TEST);
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.cullFace(gl.FRONT_AND_BACK);
 
   return { gl, input, camera };
 }
@@ -203,15 +204,15 @@ class Game {
     ];
 
     const lookat = [
-      -50 + Math.cos(t) * 50.0,
-      50 + Math.sin(t) * 50.0,
+      -50 + Math.cos(t) * 10.0,
+      50 + Math.sin(t) * 10.0,
       0.0,
     ];
 
     const [pMatrix, vMatrix] = camera.lookat(gl,
       eye,
       lookat,
-      [0, 1, 0]
+      [0, 0, 1]
     );
 
     const matrices = {
