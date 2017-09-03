@@ -1,15 +1,23 @@
 const FRAME_LENGTH = 1000.0 / 60.0;
 
+const INITIAL_COUNT = 1;
+const MAX_COUNT = 1000;
+
 export default
 class Counter {
-  constructor() {
-    this.reset();
+  constructor(count = INITIAL_COUNT) {
+    this.reset(count);
   }
 
-  reset(count = 10) {
+  reset(count = INITIAL_COUNT) {
     this._lastUpdate = null;
     this._count = count
     this._i = 0;
+    this._deltas = [];
+  }
+
+  getAverageDelta() {
+    return this._deltas.reduce((sum, x) => sum + x, 0.0) / this._deltas.length;
   }
 
   update() {
@@ -17,16 +25,24 @@ class Counter {
     const delta = now - this._lastUpdate;
     this._lastUpdate = now;
 
-    if (delta && delta > FRAME_LENGTH) {
-      if (this._count > 1) {
-        console.log('Decreasing count');
-        this._count--;
-      }
+    if (!isNaN(delta)) {
+      this._deltas.push(delta);
     }
 
-    this._i++;
-    this._lastUpdate = now;
+    const doUpdate = (this._i++ % this._count) === 0;
 
-    return this._i % this._count === 0;
+    if (doUpdate && this._deltas.length) {
+      this._recalculate();
+    }
+
+    return doUpdate;
+  }
+
+  _recalculate() {
+    const mul = this.getAverageDelta() / FRAME_LENGTH;
+    let count = Math.ceil(this._count * mul) || 0;
+    this._count = Math.min(Math.max(1, count), MAX_COUNT);
+    this._deltas = [];
+    this._i = 0;
   }
 }
