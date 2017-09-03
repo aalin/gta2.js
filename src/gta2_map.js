@@ -75,18 +75,48 @@ const TEXCOORDS = [
   [TAA, TXX],
 ];
 
-function getFace(offset, face, quad, isDown = false) {
-  const texture = face & 0x3ff;
+class Quad {
+  constructor(vertexes) {
+    this.vertexes = vertexes;
+  }
 
-  if (!texture) {
-    return [];
+  getTriangleVertexes() {
+    return [
+      this.vertexes[0],
+      this.vertexes[1],
+      this.vertexes[2],
+      this.vertexes[0],
+      this.vertexes[2],
+      this.vertexes[3],
+    ];
+  }
+
+  setPositionsFrom(quad) {
+    this.vertices.forEach((v, i) => {
+      vec3.set(v.position, ...this.vertices[i].position);
+    });
+  }
+}
+
+class Face {
+  constructor(face) {
+    this.texture = face & 0x3ff;
+    this.flip = !!(face & 0x2000);
+    this.flat = !!(face & 0x8000);
+    this.rotation = ((face >> 14) >>> 0) * 90;
+  }
+}
+
+function getFace(offset, face, quad) {
+  if (!face.texture) {
+    return null;
   }
 
   const textureOffset = vec2.create();
 
   vec2.add(textureOffset, [0, 0], [
-    (Math.floor(texture % 32) * 64) / 2048.0,
-    (Math.floor(texture / 32) * 64) / 2048.0,
+    (Math.floor(face.texture % 32) * 64) / 2048.0,
+    (Math.floor(face.texture / 32) * 64) / 2048.0,
   ]);
 
   const vertexes = Array.from({ length: 4 }, (_, i) => {
@@ -98,11 +128,8 @@ function getFace(offset, face, quad, isDown = false) {
     return new Vertex(position, texcoord);
   });
 
-  const flip = (face & 0x2000) >>> 0;
-  const rotation = ((face >> 14) >>> 0) * 90;
-
   const rotationMat = mat2d.create();
-  mat2d.rotate(rotationMat, rotationMat, -rotation * Math.PI / 180.0);
+  mat2d.rotate(rotationMat, rotationMat, -face.rotation * Math.PI / 180.0);
 
   const flipMat = mat2d.create();
   mat2d.scale(flipMat, flipMat, [1.0, -1.0]);
@@ -112,7 +139,7 @@ function getFace(offset, face, quad, isDown = false) {
     vec2.transformMat2d(vertex.texcoord, vertex.texcoord, rotationMat);
     vec2.add(vertex.texcoord, vertex.texcoord, [TWW / 2, TWW / 2]);
 
-    if (flip) {
+    if (face.flip) {
       vec2.transformMat2d(vertex.texcoord, vertex.texcoord, flipMat);
     }
 
@@ -127,50 +154,56 @@ function getFace(offset, face, quad, isDown = false) {
     vec3.add(vertex.position, vertex.position, offset);
   });
 
-  const res = [
-    vertexes[0],
-    vertexes[1],
-    vertexes[2],
-    vertexes[0],
-    vertexes[2],
-    vertexes[3],
-  ];
-
-  return res;
+  return new Quad(vertexes);
 }
 
 function getBlock(block, offset) {
   const slopeType = (block.slopeType >> 2) >>> 0;
   const lid = buildLid(slopeType);
 
-  //const lid = quad(0, 0, 0);
-  return flatten([
-    getFace(offset, block.lid, lid),
-    getFace(offset, block.top, [
+  let faces = [block.top, block.right, block.bottom, block.left, block.lid].map(face => new Face(face));
+
+  let quads = [
+    getFace(offset, faces[0], [
       [0, 1, -1],
       [1, 1, -1],
       lid[2],
       lid[3],
     ]),
-    getFace(offset, block.left, [
+    getFace(offset, faces[1], [
       [0, 0, -1],
       [0, 1, -1],
       lid[3],
       lid[0]
     ]),
-    getFace(offset, block.right, [
+    getFace(offset, faces[3], [
+      [0, 0, -1],
+      [1, 0, -1],
+      lid[1],
+      lid[0],
+    ]),
+    getFace(offset, faces[2], [
       [1, 1, -1],
       [1, 0, -1],
       lid[1],
       lid[2]
     ]),
-    getFace(offset, block.bottom, [
-      [0, 0, -1],
-      [1, 0, -1],
-      lid[1],
-      lid[0],
-    ], true),
-  ]);
+    getFace(offset, faces[4], lid),
+  ];
+
+  /*
+  if (faces[2].flat && !faces[0].flat && faces[0].texture) {
+    quads[0].setPositionsFrom(quads[2]);
+    quads[2] = null;
+  }
+
+  if (faces[0].flat && !faces[2].flat && faces[2].texture) {
+    quads[2].setPositionsFrom(quads[0]);
+    quads[0] = null;
+  }
+  */
+
+  return flatten(quads.filter(quad => !!quad).map(quad => quad.getTriangleVertexes()));
 }
 
 function constructLid(slope, numLevels) {
@@ -339,8 +372,7 @@ function* loadVertexes(parts) {
         v.forEach((vs) => {
           positions.write(vs.position);
           texcoords.write(vs.texcoord);
-        })
-
+        });
       }
 
       // yield { progress: count++ * 256, max: 256 * 256 * 8 };
@@ -441,13 +473,13 @@ GTA2Map.load = function* load(gl, filename, getState) {
       parts.push(part.result);
     }
 
-    if (counter.update) {
+    if (counter.update()) {
       yield { progress: part.progress, max: part.max, text: 'Decompressing map' };
     }
   }
 
   const models = [];
-  counter.reset(10);
+  counter.reset();
 
   for (let part of loadVertexes(parts)) {
     if (part.positions && part.positions.length) {
