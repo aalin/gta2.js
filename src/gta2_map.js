@@ -112,6 +112,10 @@ function getFace(offset, face, quad) {
     return null;
   }
 
+  if (face.flip) {
+    return null;
+  }
+
   const textureOffset = vec2.create();
 
   vec2.add(textureOffset, [0, 0], [
@@ -165,28 +169,28 @@ function getBlock(block, offset) {
 
   let quads = [
     getFace(offset, faces[0], [
-      [0, 1, -1],
-      [1, 1, -1],
+      [0, 1, 0],
+      [1, 1, 0],
       lid[2],
       lid[3],
     ]),
     getFace(offset, faces[1], [
-      [0, 0, -1],
-      [0, 1, -1],
-      lid[3],
+      [1, 1, 0],
+      [1, 0, 0],
+      lid[1],
+      lid[2]
+    ]),
+    getFace(offset, faces[2], [
+      [0, 0, 0],
+      [1, 0, 0],
+      lid[1],
       lid[0]
     ]),
     getFace(offset, faces[3], [
-      [0, 0, -1],
-      [1, 0, -1],
-      lid[1],
+      [0, 0, 0],
+      [0, 1, 0],
+      lid[3],
       lid[0],
-    ]),
-    getFace(offset, faces[2], [
-      [1, 1, -1],
-      [1, 0, -1],
-      lid[1],
-      lid[2]
     ]),
     getFace(offset, faces[4], lid),
   ];
@@ -209,10 +213,10 @@ function getBlock(block, offset) {
 function constructLid(slope, numLevels) {
   if(slope == 0) {
     return [
-      [0, 0, 0],
-      [1, 0, 0],
-      [1, 1, 0],
-      [0, 1, 0]
+      [0, 0, 1],
+      [1, 0, 1],
+      [1, 1, 1],
+      [0, 1, 1]
     ];
   }
 
