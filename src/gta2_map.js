@@ -5,7 +5,6 @@ import { vec2, vec3, mat2d } from 'gl-matrix';
 import BinaryBuffer, { StructReader } from './binary_buffer';
 import Model from './model';
 import IteratorGenerator from './iterator_generator';
-import Counter from './counter';
 
 let ITERATIONS = 0;
 
@@ -447,58 +446,56 @@ class GTA2Map {
   }
 }
 
-GTA2Map.load = function* load(gl, filename, getState) {
-  let data = null;
+GTA2Map.load = function load(gl, filename, getState) {
+  return function* (progress, done) {
+    let data = null;
 
-  const { blobStore, style } = getState();
-  console.log(blobStore);
+    const { blobStore, style } = getState();
+    console.log(blobStore);
 
-  for (let download of downloadAsset(filename, blobStore)) {
-    if (download.data) {
-      data = download.data;
-      break;
+    for (let download of downloadAsset(filename, blobStore)) {
+      if (download.data) {
+        data = download.data;
+        break;
+      }
+
+      yield progress(download.progress, download.max || 1, `Downloading ${filename}`);
     }
 
-    yield Object.assign(download, { text: `Downloading ${filename}` });
+    const attributes = {};
+
+    for (let part of parseMap(data)) {
+      Object.assign(attributes, part);
+      yield progress(0, 100, 'Parsing map');
+    }
+
+    const parts = [];
+
+    for (let part of loadParts(attributes)) {
+      if (part.result) {
+        parts.push(part.result);
+      }
+
+      yield progress(part.progress, part.max, 'Decompressing map');
+    }
+
+    const models = [];
+
+    for (let part of loadVertexes(parts)) {
+      if (part.positions && part.positions.length) {
+        const model = new Model(gl, gl.TRIANGLES);
+
+        console.log('creating model, length:', part.positions.length);
+        model.addBuffer('aVertexPosition', part.positions, 3);
+        model.addBuffer('aTexCoord', part.texcoords, 2);
+        models.push(model);
+      }
+
+      if (part.progress) {
+        yield progress(part.progress, part.max, `Creating map models (${models.length})`);
+      }
+    }
+
+    yield done({ models });
   }
-
-  const attributes = {};
-
-  for (let part of parseMap(data)) {
-    Object.assign(attributes, part);
-    yield { progress: 0, max: 100, text: 'Parsing map' };
-  }
-
-  const parts = [];
-  const counter = new Counter();
-
-  for (let part of loadParts(attributes)) {
-    if (part.result) {
-      parts.push(part.result);
-    }
-
-    if (counter.update()) {
-      yield { progress: part.progress, max: part.max, text: 'Decompressing map' };
-    }
-  }
-
-  const models = [];
-  counter.reset();
-
-  for (let part of loadVertexes(parts)) {
-    if (part.positions && part.positions.length) {
-      const model = new Model(gl, gl.TRIANGLES);
-
-      console.log('creating model, length:', part.positions.length);
-      model.addBuffer('aVertexPosition', part.positions, 3);
-      model.addBuffer('aTexCoord', part.texcoords, 2);
-      models.push(model);
-    }
-
-    if (part.progress && counter.update()) {
-      yield { progress: part.progress, max: part.max, text: `Creating map models ${models.length}` };
-    }
-  }
-
-  yield { result: { models } };
 }

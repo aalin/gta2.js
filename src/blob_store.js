@@ -89,14 +89,16 @@ class BlobStore {
   }
 }
 
-BlobStore.load = function* load(name) {
-  let store = null;
+BlobStore.load = function load(name) {
+  return function* (progress, done) {
+    let store = null;
 
-  BlobStore.open(name).then(s => store = s);
+    BlobStore.open(name).then(s => store = s);
 
-  while (store === null) {
-    yield { progress: 0, max: 100, text: 'Setting up store' };
+    while (store === null) {
+      yield progress(0, 100, 'Setting up store');
+    }
+
+    yield done(store);
   }
-
-  yield { result: store };
 }

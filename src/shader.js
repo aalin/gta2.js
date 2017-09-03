@@ -84,27 +84,29 @@ export default class Shader {
   }
 }
 
-Shader.load = function* load(gl, loadVertexShader, loadFragmentShader) {
-  let vertexShader = null;
-  let fragmentShader = null;
+Shader.load = function load(gl, loadVertexShader, loadFragmentShader) {
+  return function* (progress, done) {
+    let vertexShader = null;
+    let fragmentShader = null;
 
-  loadVertexShader().then((shader) => {
-    vertexShader = shader;
-  });
+    loadVertexShader().then((shader) => {
+      vertexShader = shader;
+    });
 
-  while (!vertexShader) {
-    yield { progress: 0, max: 2, text: 'Loading vertex shader' };
+    while (!vertexShader) {
+      yield { progress: 0, max: 2, text: 'Loading vertex shader' };
+    }
+
+    loadFragmentShader().then((shader) => {
+      fragmentShader = shader;
+    });
+
+    while (!fragmentShader) {
+      yield { progress: 1, max: 2, text: 'Loading fragment shader' };
+    }
+
+    const result = new Shader(gl, vertexShader, fragmentShader);
+
+    yield { result };
   }
-
-  loadFragmentShader().then((shader) => {
-    fragmentShader = shader;
-  });
-
-  while (!fragmentShader) {
-    yield { progress: 1, max: 2, text: 'Loading fragment shader' };
-  }
-
-  const result = new Shader(gl, vertexShader, fragmentShader);
-
-  yield { result };
 }

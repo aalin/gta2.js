@@ -32,13 +32,13 @@ class Counter {
     const doUpdate = (this._i++ % this._count) === 0;
 
     if (doUpdate && this._deltas.length) {
-      this._recalculate();
+      this._recalibrate();
     }
 
     return doUpdate;
   }
 
-  _recalculate() {
+  _recalibrate() {
     const mul = this.getAverageDelta() / FRAME_LENGTH;
     let count = Math.ceil(this._count * mul) || 0;
     this._count = Math.min(Math.max(1, count), MAX_COUNT);

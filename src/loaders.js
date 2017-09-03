@@ -1,7 +1,32 @@
-const EventEmitter = require('events').EventEmitter;
+import { EventEmitter } from 'events';
+import Counter from './counter';
 
 function percent(x, total) {
   return x / total * 100;
+}
+
+function* LoaderGenerator(loader) {
+  const counter = new Counter();
+
+  function progress(progress, max, text) {
+    if (counter.update()) {
+      return { progress, max, text, percent: progress / max * 100.0 };
+    }
+  }
+
+  function done(result) {
+    return { result };
+  }
+
+  for (let x of loader(progress, done)) {
+    if (x) {
+      yield x;
+
+      if ('result' in x) {
+        return;
+      }
+    }
+  }
 }
 
 export default
@@ -12,6 +37,10 @@ class Loaders extends EventEmitter {
   }
 
   addLoader(name, loader) {
+    if (typeof loader === 'function') {
+      loader = LoaderGenerator(loader);
+    }
+
     this.loaders.push({ name, loader });
   }
 
@@ -35,6 +64,7 @@ class Loaders extends EventEmitter {
     }
 
     if (value.result) {
+      console.log('Got result', value.result);
       this.emit('load', name, value.result);
     }
   }
