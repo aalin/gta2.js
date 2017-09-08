@@ -40,7 +40,7 @@ function* subdivide(size, partSize) {
 
   for (let y = 0; y < numParts; y++) {
     for (let x = 0; x < numParts; x++) {
-      yield createXYiterator(partSize, y * partSize, x * partSize);
+      yield createXYiterator(partSize, x * partSize, y * partSize);
     }
   }
 }
@@ -168,10 +168,10 @@ function getBlock(block, offset) {
 
   let quads = [
     getFace(offset, faces[0], [
-      [0, 1, 0],
-      [1, 1, 0],
-      lid[2],
-      lid[3],
+      [0, 0, 0],
+      [1, 0, 0],
+      lid[1],
+      lid[0],
     ]),
     getFace(offset, faces[1], [
       [1, 1, 0],
@@ -180,10 +180,10 @@ function getBlock(block, offset) {
       lid[2]
     ]),
     getFace(offset, faces[2], [
-      [0, 0, 0],
-      [1, 0, 0],
-      lid[1],
-      lid[0]
+      [0, 1, 0],
+      [1, 1, 0],
+      lid[2],
+      lid[3],
     ]),
     getFace(offset, faces[3], [
       [0, 0, 0],
@@ -401,16 +401,14 @@ function* loadParts(attributes) {
 
       const colInfo = colData.readStruct(ColInfo);
 
-      part[x] = Array.from({ length: colInfo.height });
+      part[x] = Array.from({ length: 8 });
 
-      for (var z = 0; z < colInfo.height; z++) {
-        if (z >= colInfo.offset) {
-          const blockIndex = colInfo.blockd[z - colInfo.offset];
-          const block = attributes.blocks[blockIndex];
+      for (var z = colInfo.offset; z < colInfo.height; z++) {
+        const blockIndex = colInfo.blockd[z - colInfo.offset];
+        const block = attributes.blocks[blockIndex];
 
-          if (block) {
-            part[x][z] = block;
-          }
+        if (block) {
+          part[x][z] = block;
         }
       }
     }
@@ -446,14 +444,14 @@ class GTA2Map {
   }
 }
 
-GTA2Map.load = function load(gl, filename, getState) {
+GTA2Map.load = function load(gl, filename, resources) {
   return function* (progress, done) {
     let data = null;
 
-    const { blobStore, style } = getState();
-    console.log(blobStore);
+    //const blobStore = resources.acquire('blobStore');
+    //const style = resources.acquire('style');
 
-    for (let download of downloadAsset(filename, blobStore)) {
+    for (let download of downloadAsset(filename)) {
       if (download.data) {
         data = download.data;
         break;
@@ -496,6 +494,6 @@ GTA2Map.load = function load(gl, filename, getState) {
       }
     }
 
-    yield done({ models });
+    yield done(new GTA2Map(models));
   }
 }

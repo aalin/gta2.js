@@ -45,22 +45,32 @@ class Loaders extends EventEmitter {
   }
 
   update() {
-    if (!this.loaders.length) {
+    if (this.loaders.length === 0) {
       return;
     }
 
     const { name, loader } = this.loaders[0];
+
+    if (!loader) {
+      throw `Loader is ${loader}`;
+    }
+
     const next = loader.next();
 
     if (next.done) {
       this.loaders.shift();
+
+      if (!this.loaders.length) {
+        this.emit('done');
+      }
+
       return;
     }
 
     const value = next.value;
 
     if (value.progress) {
-      this.emit('update', name, percent(value.progress, value.max), value.text || name);
+      this.emit('update', name, value.percent || percent(value.progress, value.max), value.text || name);
     }
 
     if (value.result) {

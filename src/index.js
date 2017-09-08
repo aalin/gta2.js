@@ -1,13 +1,10 @@
 import { mat4, vec3, vec2 } from 'gl-matrix';
-import Camera from './camera';
 import Texture from './texture';
-import Shader from './shader';
 import Model from './model';
-import GTA2Style from './gta2_style';
-import GTA2Map from './gta2_map';
-import Loaders from './loaders';
-import BlobStore from './blob_store';
 import Input from './input';
+import Gameplay from './gameplay';
+import Resources from './resources';
+import { wrapGameState } from './game_state';
 
 function initGL(canvas) {
   try {
@@ -30,6 +27,8 @@ function createFullscreenCanvas(zIndex = 0) {
   canvas.width = window.innerWidth * 2;
   canvas.height = window.innerHeight * 2;
   canvas.style.zIndex = zIndex;
+  //canvas.style.opacity = 0;
+  //canvas.style.transition = 'opacity .2s, display .2s';
   document.body.appendChild(canvas);
   return canvas;
 }
@@ -48,7 +47,6 @@ function setupControls() {
   const canvas = createFullscreenCanvas(0);
   const gl = initGL(canvas);
   const input = new Input();
-  const camera = new Camera();
 
   gl.clearColor(0.93, 0.94, 0.91, 1.0);
   gl.enable(gl.DEPTH_TEST);
@@ -56,7 +54,7 @@ function setupControls() {
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   gl.cullFace(gl.FRONT_AND_BACK);
 
-  return { gl, input, camera };
+  return { gl, input };
 }
 
 function setupTextCanvas() {
@@ -68,67 +66,84 @@ function setupTextCanvas() {
 
 class Game {
   constructor(level) {
-    this.loaders = new Loaders();
-
     this.ticks = 0;
     this.state = {};
     this.nextState = {};
     this.nextStateCallbacks = [];
 
-    this.loaders.on('load', (name, item) => {
-      this.setState({ loadingText: null });
-
-      if (name === 'map') {
-        this.items[name] = new GTA2Map(item.models);
-        return;
-      }
-
-      this.items[name] = item;
-    });
-
-    this.loaders.on('update', (name, percent, text) => {
-      const loadingText = [
-        name.padEnd(10),
-        text.padEnd(20),
-        percent.toFixed(2).padStart(5) + "%"
-      ].join(' ');
-
-      this.setState({ loadingText });
-    });
-
     this.running = false;
-    this.items = {};
 
     this.input = new Input();
 
     this.controls = setupControls();
     this.canvas2d = setupTextCanvas();
 
+    this.funcs2d = [];
+
     this._run = this._run.bind(this);
 
-    this.loaders.addLoader('shader',
-      Shader.load(
-        this.controls.gl,
-        () => System.import("./shaders/default.vert"),
-        () => System.import("./shaders/default.frag"),
-      )
-    );
+    this.states = [];
 
-    this.loaders.addLoader('blobStore', BlobStore.load('data'));
+    this.pushState(new Gameplay(this, level));
+  }
 
-    this.loaders.addLoader(
-      'style',
-      GTA2Style.load(this.controls.gl, `/levels/${level}.sty`)
-    );
+  addResource(name, value) {
+    this.states.forEach((state) => {
+      if (state.hasDependency(name)) {
+        console.log('Setting resource', name, 'on', state.constructor.name);
+        state.setResource(name, value);
+      }
+    });
 
-    this.loaders.addLoader(
-      'map',
-      GTA2Map.load(
-        this.controls.gl,
-        `/levels/${level}.gmp`,
-        () => ({ style: this.items.style, blobStore: this.items.blobStore })
-      ),
-    );
+    return this;
+  }
+
+  pushState(state, ...args) {
+    if (typeof state === 'function') {
+      state = new klass(this, ...args);
+    } else {
+      if (args.length) {
+        throw `Args ${JSON.stringify(args)} passed when given state ${JSON.stringify(state)}`;
+      }
+    }
+
+    this.states[0] && this.states[0].deactivate();
+
+    this.states.unshift(wrapGameState(state));
+
+    state.mount();
+    state.activate();
+  }
+
+  popState() {
+    const state = this.states.shift();
+
+    if (state) {
+      state.deactivate();
+      state.unmount();
+    }
+
+    const resourceNames = new Set(this.states.reduce((set, state) => set.concat(Array.from(Object.keys(state.getResources()))), []));
+
+    const resources = state.getResources();
+
+    for (let name of Object.keys(resources)) {
+      if (!resourceNames.has(name)) {
+        const resource = resources[name];
+
+        if (resource && typeof resource.destroy === 'function') {
+          resource.destroy();
+        }
+      }
+    }
+
+    if (this.states.length === 0) {
+      console.log('Stopping because there are no more states');
+      this.stop();
+    }
+  }
+
+  get items() {
   }
 
   setState(state, cb = null) {
@@ -159,7 +174,7 @@ class Game {
   }
 
   update() {
-    this.loaders.update();
+    this.states[0] && this.states[0].update(this.ticks);
 
     const { input } = this.controls;
 
@@ -181,71 +196,36 @@ class Game {
   }
 
   draw() {
-    // console.log('draw');
-
-    /*
-    if (Object.keys(this.items).length) {
-      console.log(this.items);
-      this.stop();
-    }
-    */
-    const { canvas, gl, camera, input } = this.controls;
-
-    const cameraState = {
-      zoom: 10.0
-    };
-
-    const t = this.ticks / 5000.0;
-
-    const eye = [
-      -50 + Math.cos(t) * 50.0,
-      50 + Math.sin(t) * 50.0,
-      20.0
-    ];
-
-    const lookat = [
-      -50 + Math.cos(t) * 10.0,
-      50 + Math.sin(t) * 10.0,
-      0.0,
-    ];
-
-    const [pMatrix, vMatrix] = camera.lookat(gl,
-      eye,
-      lookat,
-      [0, 0, 1]
-    );
-
-    const matrices = {
-      p: pMatrix,
-      v: vMatrix,
-      m: mat4.create()
-    };
-
-    if (this.items.map) {
-      if (this.items.shader) {
-        this.items.map.draw(gl, this.items.shader, matrices, this.items.style);
-      }
-    }
-
-    this.draw2d();
+    this.funcs2d = [];
+    this.states[0] && this.states[0].draw(this.ticks);
+    this._draw2d();
   }
 
-  draw2d() {
+  draw2d(fn) {
+    this.funcs2d.push(fn);
+  }
+
+  _draw2d() {
     const { ctx, canvas } = this.canvas2d;
 
-    if (this.state.loadingText) {
-      canvas.style.display = 'block';
-    } else {
-      canvas.style.display = 'none';
+    if (!this.funcs2d.length) {
+      if (canvas.style.display !== 'none') {
+        //canvas.style.opacity = 0;
+        canvas.style.display = 'none';
+      }
+
       return;
     }
 
-    const radius = 5.0;
+    if (canvas.style.display !== 'block') {
+      canvas.style.display = 'block';
+      //canvas.style.opacity = 1;
+    }
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#000000';
-    ctx.font = '50px courier new';
-    ctx.fillText(this.state.loadingText, 200, canvas.height / 2);
+
+    this.funcs2d.forEach(fn => fn(ctx, canvas));
+    this.funcs2d = [];
   }
 
   _updateState() {
@@ -255,5 +235,9 @@ class Game {
     this.nextState = {};
   }
 }
-const game = new Game('ste');
+
+const levels = ['wil', 'bil', 'ste'];
+const level = 2;
+
+const game = new Game(levels[level]);
 game.start();
