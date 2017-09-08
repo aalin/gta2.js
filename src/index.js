@@ -3,8 +3,9 @@ import Texture from './texture';
 import Model from './model';
 import Input from './input';
 import Gameplay from './gameplay';
-import Resources from './resources';
 import { wrapGameState } from './game_state';
+
+const MAX_DELTA = 1 / 30.0;
 
 function initGL(canvas) {
   try {
@@ -118,32 +119,31 @@ class Game {
   popState() {
     const state = this.states.shift();
 
-    if (state) {
-      state.deactivate();
-      state.unmount();
+    if (!state) {
+      return;
     }
+
+    state.deactivate();
+    state.unmount();
 
     const resourceNames = new Set(this.states.reduce((set, state) => set.concat(Array.from(Object.keys(state.getResources()))), []));
 
     const resources = state.getResources();
 
+    console.log('Currently used resources', resourceNames);
+    console.log('Resources used by current state', Object.keys(resources));
+
     for (let name of Object.keys(resources)) {
       if (!resourceNames.has(name)) {
         const resource = resources[name];
 
-        if (resource && typeof resource.destroy === 'function') {
-          resource.destroy();
+        console.log('Freeing resource', name);
+
+        if (resource && typeof resource.destructor === 'function') {
+          resource.destructor();
         }
       }
     }
-
-    if (this.states.length === 0) {
-      console.log('Stopping because there are no more states');
-      this.stop();
-    }
-  }
-
-  get items() {
   }
 
   setState(state, cb = null) {
@@ -157,13 +157,23 @@ class Game {
   }
 
   stop() {
-    this.running = false;
+    while (this.states.length) {
+      this.popState();
+    }
+
+    const canvas = this.controls.gl.canvas;
+    canvas.width = 1;
+    canvas.height = 1;
+    canvas.parentNode && canvas.parentNode.removeChild(canvas);
   }
 
   _run(ticks) {
+    this.delta = Math.max(ticks - this.ticks, MAX_DELTA);
     this.ticks = ticks;
 
-    if (!this.running) {
+    if (this.states.length === 0) {
+      console.log('Stopping because there are no more states');
+      this.stop();
       return;
     }
 

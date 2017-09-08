@@ -146,6 +146,10 @@ export default class GTA2Style {
     this.textures = textures;
   }
 
+  destructor() {
+    this.textures.forEach(texture => texture.destructor());
+  }
+
   draw() {
     //this.textures.each(texture => texture.bind())
   }

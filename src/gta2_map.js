@@ -6,6 +6,8 @@ import BinaryBuffer, { StructReader } from './binary_buffer';
 import Model from './model';
 import IteratorGenerator from './iterator_generator';
 
+const MAP_SIZE = 256;
+
 let ITERATIONS = 0;
 
 const INT_SIZE = 4;
@@ -91,8 +93,8 @@ class Quad {
   }
 
   setPositionsFrom(quad) {
-    this.vertices.forEach((v, i) => {
-      vec3.set(v.position, ...this.vertices[i].position);
+    this.vertexes.forEach((v, i) => {
+      vec3.set(v.position, ...(this.vertexes[i].position));
     });
   }
 }
@@ -107,12 +109,13 @@ class Face {
 }
 
 function getFace(offset, face, quad) {
-  if (!face.texture) {
+  if (face.texture === 0) {
     return null;
   }
 
-  if (face.flip) {
-    return null;
+  if (face.flat) {
+    // face.texture = 0;
+    // return null;
   }
 
   const textureOffset = vec2.create();
@@ -164,7 +167,13 @@ function getBlock(block, offset) {
   const slopeType = (block.slopeType >> 2) >>> 0;
   const lid = buildLid(slopeType);
 
-  let faces = [block.top, block.right, block.bottom, block.left, block.lid].map(face => new Face(face));
+  let faces = [
+    block.top,
+    block.right,
+    block.bottom,
+    block.left,
+    block.lid
+  ].map(face => new Face(face));
 
   let quads = [
     getFace(offset, faces[0], [
@@ -194,17 +203,25 @@ function getBlock(block, offset) {
     getFace(offset, faces[4], lid),
   ];
 
-  /*
-  if (faces[2].flat && !faces[0].flat && faces[0].texture) {
-    quads[0].setPositionsFrom(quads[2]);
-    quads[2] = null;
+
+  function replaceFlatness(index1, index2) {
+    if (faces[index1].flat && !faces[index2].flat && faces[index2].texture) {
+      quads[index1] = null;
+    }
+    /*
+    if (faces[index1].flat && !faces[index2].flat && faces[index2].texture) {
+      if (quads[index1] && quads[index2]) {
+        quads[index1].setPositionsFrom(quads[index2]);
+        quads[index2] = null;
+      }
+    }
+    */
   }
 
-  if (faces[0].flat && !faces[2].flat && faces[2].texture) {
-    quads[2].setPositionsFrom(quads[0]);
-    quads[0] = null;
-  }
-  */
+  replaceFlatness(2, 0);
+  replaceFlatness(0, 2);
+  replaceFlatness(1, 3);
+  replaceFlatness(3, 1);
 
   return flatten(quads.filter(quad => !!quad).map(quad => quad.getTriangleVertexes()));
 }
@@ -265,7 +282,7 @@ function* parseMap(data) {
 
     switch (type) {
       case 'DMAP':
-        yield { base: buffer.read32arrayLE(256 * 256 * INT_SIZE) };
+        yield { base: buffer.read32arrayLE(MAP_SIZE * MAP_SIZE * INT_SIZE) };
 
         const columnWords = buffer.read32LE();
 
@@ -346,10 +363,10 @@ function* loadVertexes(parts) {
   const size = parts.length;
   let count = 0;
 
-  const positions = new ArrayWriter(new Float32Array(256 * 256 * 3 * 20));
-  const texcoords = new ArrayWriter(new Float32Array(256 * 256 * 2 * 20));
+  const positions = new ArrayWriter(new Float32Array(MAP_SIZE * MAP_SIZE * 3 * 20));
+  const texcoords = new ArrayWriter(new Float32Array(MAP_SIZE * MAP_SIZE * 2 * 20));
 
-  for (let divider of subdivide(256, 32)) {
+  for (let divider of subdivide(MAP_SIZE, 32)) {
     positions.reset();
     texcoords.reset();
 
@@ -378,7 +395,7 @@ function* loadVertexes(parts) {
         });
       }
 
-      // yield { progress: count++ * 256, max: 256 * 256 * 8 };
+      // yield { progress: count++ * MAP_SIZE, max: MAP_SIZE * MAP_SIZE * 8 };
     }
 
     yield { progress: count++, max: 64, positions: positions.array, texcoords: texcoords.array };
@@ -388,14 +405,14 @@ function* loadVertexes(parts) {
 function* loadParts(attributes) {
   const colData = new BinaryBuffer(attributes.columns);
 
-  for (let y = 0; y < 256; y++) {
-    const part = Array.from({ length: 256 });
+  for (let y = 0; y < MAP_SIZE; y++) {
+    const part = Array.from({ length: MAP_SIZE });
 
-    yield { progress: y, max: 256 };
+    yield { progress: y, max: MAP_SIZE };
 
-    for (let x = 0; x < 256; x++) {
+    for (let x = 0; x < MAP_SIZE; x++) {
 
-      const columnIndex = attributes.base[y * 256 + x] * 4;
+      const columnIndex = attributes.base[y * MAP_SIZE + x] * 4;
 
       colData.setPos(columnIndex);
 
@@ -409,11 +426,13 @@ function* loadParts(attributes) {
 
         if (block) {
           part[x][z] = block;
+        } else {
+          console.error('no block found at', x, z, blockIndex);
         }
       }
     }
 
-    yield { progress: y, max: 256, result: part };
+    yield { progress: y, max: MAP_SIZE, result: part };
   }
 }
 
@@ -444,12 +463,9 @@ class GTA2Map {
   }
 }
 
-GTA2Map.load = function load(gl, filename, resources) {
+GTA2Map.load = function load(gl, filename) {
   return function* (progress, done) {
     let data = null;
-
-    //const blobStore = resources.acquire('blobStore');
-    //const style = resources.acquire('style');
 
     for (let download of downloadAsset(filename)) {
       if (download.data) {

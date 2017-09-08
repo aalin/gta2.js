@@ -117,6 +117,10 @@ class GameState extends EventEmitter {
     return this[_resources];
   }
 
+  get input() {
+    return this.game.input;
+  }
+
   get gl() {
     return this.game.controls.gl;
   }

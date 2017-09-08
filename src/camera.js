@@ -1,5 +1,8 @@
 import { mat4, vec3 } from 'gl-matrix';
 
+const Z_NEAR = 1.0;
+const Z_FAR = 256.0;
+
 export default class Camera {
   draw(gl, state, lookat) {
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
@@ -31,7 +34,7 @@ export default class Camera {
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const pMatrix = mat4.create();
-    mat4.perspective(pMatrix, 45.0, 1.0, 1.0, 100.0);
+    mat4.perspective(pMatrix, 45.0, 1.0, Z_NEAR, Z_FAR);
     const vMatrix = mat4.create();
     mat4.lookAt(vMatrix, eye, center, up);
     mat4.scale(vMatrix, vMatrix, [-1.0, 1.0, 1.0]);

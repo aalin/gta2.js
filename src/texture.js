@@ -11,7 +11,7 @@ export default class Texture {
     this.texture = gl.createTexture();
     console.log('Created texture', index);
 
-    gl.activeTexture(gl.TEXTURE0 + index);
+    gl.activeTexture(gl.TEXTURE0 + this.index);
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
 
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
@@ -31,5 +31,12 @@ export default class Texture {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     }
+  }
+
+  destructor() {
+    console.warn('Destructor for texture', this.texture);
+    gl.activeTexture(gl.TEXTURE0 + this.index);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    glDeleteTexture(this.texture);
   }
 }

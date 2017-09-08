@@ -6,6 +6,7 @@ import GTA2Style from './gta2_style';
 import GTA2Map from './gta2_map';
 import Camera from './camera';
 import { mat4 } from 'gl-matrix';
+import { KEYS } from './input';
 
 export default
 class Gameplay extends GameState {
@@ -26,8 +27,7 @@ class Gameplay extends GameState {
     this.addDependency('map', () => (
       GTA2Map.load(
         this.gl,
-        `/levels/${level}.gmp`,
-        this.resources
+        `/levels/${level}.gmp`
       )
     ));
 
@@ -61,6 +61,28 @@ class Gameplay extends GameState {
   }
 
   update(ticks) {
+    if (this.input.isDown(27)) {
+      this.game.stop();
+      return;
+    }
+
+    if (this.input.isDown(KEYS.W)) {
+    }
+    if (this.input.isDown(KEYS.S)) {
+    }
+    if (this.input.isDown(KEYS.A)) {
+    }
+    if (this.input.isDown(KEYS.D)) {
+    }
+
+    if (this.input.isDown(KEYS.UP)) {
+    }
+    if (this.input.isDown(KEYS.DOWN)) {
+    }
+    if (this.input.isDown(KEYS.LEFT)) {
+    }
+    if (this.input.isDown(KEYS.RIGHT)) {
+    }
   }
 
   draw(ticks) {
