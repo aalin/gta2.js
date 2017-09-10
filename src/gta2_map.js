@@ -76,34 +76,38 @@ const TEXCOORDS = [
   [TAA, TXX],
 ];
 
-class Quad {
+class Triangle {
   constructor(vertexes) {
     this.vertexes = vertexes;
   }
+}
 
-  getTriangleVertexes() {
-    return [
-      this.vertexes[0],
-      this.vertexes[1],
-      this.vertexes[2],
-      this.vertexes[0],
-      this.vertexes[2],
-      this.vertexes[3],
-    ];
+class Quad {
+  constructor(vertexes) {
+    this.triangles = [
+      new Triangle([
+        vertexes[0],
+        vertexes[1],
+        vertexes[2]
+      ]),
+      new Triangle([
+        vertexes[0],
+        vertexes[2],
+        vertexes[3]
+      ])
+    ]
   }
 
-  setPositionsFrom(quad) {
-    this.vertexes.forEach((v, i) => {
-      vec3.set(v.position, ...(this.vertexes[i].position));
-    });
+  getVertexes() {
+    return this.triangles.reduce((a, tri) => a.concat(tri.vertexes), []);
   }
 }
 
 class Face {
   constructor(face) {
     this.texture = face & 0x3ff;
-    this.flip = !!(face & 0x2000);
-    this.flat = !!(face & 0x8000);
+    this.flip = !!(face & 0x1000);
+    this.flat = !!(face & 0x2000);
     this.rotation = ((face >> 14) >>> 0) * 90;
   }
 }
@@ -113,9 +117,12 @@ function getFace(offset, face, quad) {
     return null;
   }
 
+  if (face.texture === 1023) {
+    face.texture = 0;
+  }
+
   if (face.flat) {
     // face.texture = 0;
-    // return null;
   }
 
   const textureOffset = vec2.create();
@@ -168,9 +175,9 @@ function getBlock(block, offset) {
   const lid = buildLid(slopeType);
 
   let faces = [
-    block.top,
-    block.right,
     block.bottom,
+    block.right,
+    block.top,
     block.left,
     block.lid
   ].map(face => new Face(face));
@@ -218,12 +225,14 @@ function getBlock(block, offset) {
     */
   }
 
+  /*
   replaceFlatness(2, 0);
   replaceFlatness(0, 2);
   replaceFlatness(1, 3);
   replaceFlatness(3, 1);
+  */
 
-  return flatten(quads.filter(quad => !!quad).map(quad => quad.getTriangleVertexes()));
+  return flatten(quads.filter(quad => !!quad).map(quad => quad.getVertexes()));
 }
 
 function constructLid(slope, numLevels) {
@@ -238,7 +247,7 @@ function constructLid(slope, numLevels) {
 
   const height = 1.0 / numLevels;
   const level = slope % numLevels;
-  const low = height * level - height * numLevels;
+  const low = 1.0 + height * level - height * numLevels;
 
   let lid = [
     [0, 0, low],
@@ -250,12 +259,12 @@ function constructLid(slope, numLevels) {
   // this is weird, everything seems to be mirrored and upside down... :/
   switch (slope / numLevels) {
     case 0: // up
-      vec3.add(lid[2], lid[2], [0, 0, height]);
-      vec3.add(lid[3], lid[3], [0, 0, height]);
-      break;
-    case 1: // down
       vec3.add(lid[0], lid[0], [0, 0, height]);
       vec3.add(lid[1], lid[1], [0, 0, height]);
+      break;
+    case 1: // down
+      vec3.add(lid[2], lid[2], [0, 0, height]);
+      vec3.add(lid[3], lid[3], [0, 0, height]);
       break;
     case 2: // right
       vec3.add(lid[0], lid[0], [0, 0, height]);
@@ -425,7 +434,7 @@ function* loadParts(attributes) {
         const block = attributes.blocks[blockIndex];
 
         if (block) {
-          part[x][z] = block;
+          part[x][z - colInfo.offset] = block;
         } else {
           console.error('no block found at', x, z, blockIndex);
         }
