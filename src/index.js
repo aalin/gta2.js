@@ -49,7 +49,8 @@ function setupControls() {
   const gl = initGL(canvas);
   const input = new Input();
 
-  gl.clearColor(0.93, 0.94, 0.91, 1.0);
+  // gl.clearColor(0.93, 0.94, 0.91, 1.0);
+  gl.clearColor(0.0, 0.94, 0.91, 1.0);
   gl.enable(gl.DEPTH_TEST);
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -206,6 +207,9 @@ class Game {
   }
 
   draw() {
+    const gl = this.controls.gl;
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
     this.funcs2d = [];
     this.states[0] && this.states[0].draw(this.ticks);
     this._draw2d();
@@ -247,7 +251,7 @@ class Game {
 }
 
 const levels = ['wil', 'bil', 'ste'];
-const level = 2;
+const level = 0;
 
 const game = new Game(levels[level]);
 game.start();

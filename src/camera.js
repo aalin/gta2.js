@@ -6,7 +6,6 @@ const Z_FAR = 256.0;
 export default class Camera {
   draw(gl, state, lookat) {
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const pMatrix = mat4.create();
 
     const screenRatio = gl.viewportWidth / gl.viewportHeight;
