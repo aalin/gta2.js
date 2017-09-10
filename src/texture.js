@@ -35,8 +35,9 @@ export default class Texture {
 
   destructor() {
     console.warn('Destructor for texture', this.texture);
+    const gl = this.gl;
     gl.activeTexture(gl.TEXTURE0 + this.index);
     gl.bindTexture(gl.TEXTURE_2D, null);
-    glDeleteTexture(this.texture);
+    gl.deleteTexture(this.texture);
   }
 }
