@@ -142,6 +142,47 @@ function* parseStyle(data) {
 }
 
 export default class GTA2Style {
+  static load(gl, filename, textureIndex = 1) {
+    return function* (progress, done) {
+      let data = null;
+
+      for (let download of downloadAsset(filename)) {
+        if (download.data) {
+          data = download.data;
+          break;
+        }
+
+        yield progress(download.progress, download.max || 1, `Downloading ${filename}`);
+      }
+
+      const style = {};
+
+      for (let details of parseStyle(data)) {
+        if (details._progress) {
+          yield progress(details._progress, details._max, `Parsing style (${details._type})`)
+        } else {
+          Object.assign(style, details);
+        }
+      }
+
+      const textures = [];
+
+      for (let details of loadTextures(gl, style, textureIndex)) {
+        if (details._progress) {
+          yield progress(details._progress, details._max, `Loading textures (${details._type})`)
+        }
+
+        if (details.texture) {
+          textures.push(details.texture);
+        }
+      }
+
+      console.log("Number of textures", textures.length);
+
+      yield done(new GTA2Style(textures));
+    }
+  }
+
   constructor(textures) {
     this.textures = textures;
   }
@@ -152,46 +193,5 @@ export default class GTA2Style {
 
   draw() {
     //this.textures.each(texture => texture.bind())
-  }
-}
-
-GTA2Style.load = function load(gl, filename, textureIndex = 1) {
-  return function* (progress, done) {
-    let data = null;
-
-    for (let download of downloadAsset(filename)) {
-      if (download.data) {
-        data = download.data;
-        break;
-      }
-
-      yield progress(download.progress, download.max || 1, `Downloading ${filename}`);
-    }
-
-    const style = {};
-
-    for (let details of parseStyle(data)) {
-      if (details._progress) {
-        yield progress(details._progress, details._max, `Parsing style (${details._type})`)
-      } else {
-        Object.assign(style, details);
-      }
-    }
-
-    const textures = [];
-
-    for (let details of loadTextures(gl, style, textureIndex)) {
-      if (details._progress) {
-        yield progress(details._progress, details._max, `Loading textures (${details._type})`)
-      }
-
-      if (details.texture) {
-        textures.push(details.texture);
-      }
-    }
-
-    console.log("Number of textures", textures.length);
-
-    yield done(new GTA2Style(textures));
   }
 }
