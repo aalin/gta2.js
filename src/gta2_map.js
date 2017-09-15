@@ -184,26 +184,26 @@ function getBlock(block, offset) {
 
   let quads = [
     getFace(offset, faces[0], [
-      [0, 0, 0],
-      [1, 0, 0],
-      lid[1],
-      lid[0],
+      [0, 1, -1],
+      [1, 1, -1],
+      lid[2],
+      lid[3],
     ]),
     getFace(offset, faces[1], [
-      [1, 1, 0],
-      [1, 0, 0],
+      [1, 1, -1],
+      [1, 0, -1],
       lid[1],
       lid[2]
     ]),
     getFace(offset, faces[2], [
-      [0, 1, 0],
-      [1, 1, 0],
-      lid[2],
-      lid[3],
+      [0, 0, -1],
+      [1, 0, -1],
+      lid[1],
+      lid[0],
     ]),
     getFace(offset, faces[3], [
-      [0, 0, 0],
-      [0, 1, 0],
+      [0, 0, -1],
+      [0, 1, -1],
       lid[3],
       lid[0],
     ]),
@@ -236,47 +236,47 @@ function getBlock(block, offset) {
 }
 
 function constructLid(slope, numLevels) {
-  if(slope == 0) {
+  if(slope === 0) {
     return [
-      [0, 0, 1],
-      [1, 0, 1],
-      [1, 1, 1],
-      [0, 1, 1]
+      [0, 0, 0],
+      [1, 0, 0],
+      [1, 1, 0],
+      [0, 1, 0]
     ];
   }
 
   const height = 1.0 / numLevels;
   const level = slope % numLevels;
-  const low = 1.0 + height * level - height * numLevels;
+  const low = height * level - height * numLevels;
 
-  let lid = [
-    [0, 0, low],
-    [1, 0, low],
-    [1, 1, low],
-    [0, 1, low],
-  ];
+  let lid = {
+    tl: [0, 0, low],
+    tr: [1, 0, low],
+    bl: [0, 1, low],
+    br: [1, 1, low],
+  };
 
   // this is weird, everything seems to be mirrored and upside down... :/
-  switch (slope / numLevels) {
+  switch (Math.floor(slope / numLevels)) {
     case 0: // up
-      vec3.add(lid[0], lid[0], [0, 0, height]);
-      vec3.add(lid[1], lid[1], [0, 0, height]);
+      vec3.add(lid.tl, lid.tl, [0, 0, height]);
+      vec3.add(lid.tr, lid.tr, [0, 0, height]);
       break;
     case 1: // down
-      vec3.add(lid[2], lid[2], [0, 0, height]);
-      vec3.add(lid[3], lid[3], [0, 0, height]);
+      vec3.add(lid.br, lid.br, [0, 0, height]);
+      vec3.add(lid.bl, lid.bl, [0, 0, height]);
       break;
     case 2: // right
-      vec3.add(lid[0], lid[0], [0, 0, height]);
-      vec3.add(lid[3], lid[3], [0, 0, height]);
+      vec3.add(lid.tl, lid.tl, [0, 0, height]);
+      vec3.add(lid.bl, lid.bl, [0, 0, height]);
       break;
     case 3: // left
-      vec3.add(lid[1], lid[1], [0, 0, height]);
-      vec3.add(lid[2], lid[2], [0, 0, height]);
+      vec3.add(lid.tr, lid.tr, [0, 0, height]);
+      vec3.add(lid.br, lid.br, [0, 0, height]);
       break;
   }
 
-  return lid;
+  return [lid.tl, lid.tr, lid.br, lid.bl];
 }
 
 function eachSlice(array, size, callback) {
@@ -434,7 +434,7 @@ function* loadParts(attributes) {
         const block = attributes.blocks[blockIndex];
 
         if (block) {
-          part[x][z - colInfo.offset] = block;
+          part[x][z] = block;
         } else {
           console.error('no block found at', x, z, blockIndex);
         }
