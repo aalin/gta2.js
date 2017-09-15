@@ -48,12 +48,14 @@ export class StructReader {
   }
 }
 
+const packFn = (acc, x) => (acc << 8) + x;
+
 export function packIntLE(array) {
-  return packIntBE(array.reverse());
+  return array.reduceRight(packFn, 0) >>> 0;
 }
 
 export function packIntBE(array) {
-  return array.reduce((acc, x) => (acc << 8) + x, 0) >>> 0;
+  return array.reduce(packFn, 0) >>> 0;
 }
 
 function formatHex(array, length = 1) {
