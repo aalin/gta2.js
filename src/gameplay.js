@@ -5,36 +5,9 @@ import BlobStore from './blob_store';
 import GTA2Style from './gta2_style';
 import GTA2Map from './gta2_map';
 import Camera from './camera';
-import { vec2, vec3, mat4 } from 'gl-matrix';
+import { mat4 } from 'gl-matrix';
 import { KEYS } from './input';
-
-class Player {
-  constructor(x, y) {
-    this.position = vec3.fromValues(x, y, 0.0);
-    this.direction = 0.0;
-  }
-
-  turn(amount) {
-    this.direction += amount;
-    console.log(this.direction);
-    return this;
-  }
-
-  move(amount) {
-    console.log("Moving", amount.toFixed(2));
-
-    vec3.add(this.position, this.position, [
-      Math.cos(this.direction * Math.PI) * amount,
-      Math.sin(this.direction * Math.PI) * amount,
-      0.0
-    ]);
-  }
-}
-
-const RUN_SPEED = 4.0;
-const WALK_SPEED = 2.0;
-const TURN_SPEED = 0.5;
-const BACKWARD_SPEED = 1.0;
+import Player from './player';
 
 export default
 class Gameplay extends GameState {
@@ -96,19 +69,21 @@ class Gameplay extends GameState {
     }
 
     if (this.input.isDown(KEYS.W)) {
-      const isRunning = this.input.isDown(KEYS.SHIFT);
-      const speed = isRunning ? RUN_SPEED : WALK_SPEED;
-      this.player.move(speed * delta);
+      if (this.input.isDown(KEYS.SHIFT)) {
+        this.player.run(delta);
+      } else {
+        this.player.walk(delta);
+      }
     } else if (this.input.isDown(KEYS.S)) {
-      this.player.move(BACKWARD_SPEED * delta);
+      this.player.back(delta);
     }
 
     if (this.input.isDown(KEYS.A)) {
-      this.player.turn(TURN_SPEED * delta);
+      this.player.turn(delta);
     }
 
     if (this.input.isDown(KEYS.D)) {
-      this.player.turn(-TURN_SPEED * delta);
+      this.player.turn(-delta);
     }
 
     if (this.input.isDown(KEYS.UP)) {
