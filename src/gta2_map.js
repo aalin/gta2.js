@@ -7,9 +7,6 @@ import Model from './model';
 import IteratorGenerator from './iterator_generator';
 
 const MAP_SIZE = 256;
-
-let ITERATIONS = 0;
-
 const INT_SIZE = 4;
 
 const ColInfo = new StructReader({
