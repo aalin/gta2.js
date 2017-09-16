@@ -159,8 +159,8 @@ class Quad {
 class Face {
   constructor(face) {
     this.texture = (face & 0x3ff) >>> 0;
-    this.flip = !!(face & 0x1000);
-    this.flat = !!(face & 0x2000);
+    this.flat = !!(face & 0x1000);
+    this.flip = !!(face & 0x2000);
     this.rotation = ((face >> 14) >>> 0) * 90;
   }
 }
@@ -203,15 +203,16 @@ function getFace(offset, face, quad) {
   mat2d.rotate(rotationMat, rotationMat, -face.rotation * Math.PI / 180.0);
 
   const flipMat = mat2d.create();
-  mat2d.scale(flipMat, flipMat, [1.0, -1.0]);
+  mat2d.scale(flipMat, flipMat, [-1.0, 1.0]);
 
   vertexes.forEach((vertex, i) => {
     vec2.add(vertex.texcoord, vertex.texcoord, [-TWW / 2, -TWW / 2]);
 
-    vec2.transformMat2d(vertex.texcoord, vertex.texcoord, rotationMat);
     if (face.flip) {
       vec2.transformMat2d(vertex.texcoord, vertex.texcoord, flipMat);
     }
+
+    vec2.transformMat2d(vertex.texcoord, vertex.texcoord, rotationMat);
 
     vec2.add(vertex.texcoord, vertex.texcoord, [TWW / 2, TWW / 2]);
 
