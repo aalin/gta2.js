@@ -49,14 +49,67 @@ function* subdivide(size, partSize) {
 
 function buildLid(slopeType) {
   switch (true) {
-    case slopeType > 1 && slopeType <= 8:
+    case 62:
+    case 63:
+      return null;
+    case slopeType >= 1 && slopeType <= 8:
       return constructLid(slopeType - 1, 2);
-    case slopeType > 9 && slopeType <= 40:
+    case slopeType >= 9 && slopeType <= 40:
       return constructLid(slopeType - 9, 8);
-    case slopeType > 41 && slopeType <= 44:
+    case slopeType >= 41 && slopeType <= 44:
       return constructLid(slopeType - 41, 1);
+    case slopeType >= 45 && slopeType <= 48:
+      //return constructLid(slopeType - 44, 1, true);
     default:
       return constructLid(0, 0);
+  }
+}
+
+function makeDiagonalSlope(direction, lid, height) {
+  const half = height / 2.0;
+
+  switch (direction) {
+    case 0: // up left
+      vec3.add(lid.tl, lid.tl, [0, 0, height]);
+      vec3.add(lid.tr, lid.tr, [0, 0, half]);
+      vec3.add(lid.bl, lid.br, [0, 0, half]);
+      break;
+    case 1: // up right
+      vec3.add(lid.tr, lid.tr, [0, 0, height]);
+      vec3.add(lid.tl, lid.tl, [0, 0, half]);
+      vec3.add(lid.br, lid.br, [0, 0, half]);
+      break;
+    case 2: // down left
+      vec3.add(lid.bl, lid.bl, [0, 0, height]);
+      vec3.add(lid.br, lid.br, [0, 0, half]);
+      vec3.add(lid.tl, lid.tl, [0, 0, half]);
+      break;
+    case 3: // down right
+      vec3.add(lid.br, lid.br, [0, 0, height]);
+      vec3.add(lid.bl, lid.bl, [0, 0, half]);
+      vec3.add(lid.tr, lid.tr, [0, 0, half]);
+      break;
+  }
+}
+
+function makeRegularSlope(direction, lid, height) {
+  switch (direction) {
+    case 0: // up
+      vec3.add(lid.tl, lid.tl, [0, 0, height]);
+      vec3.add(lid.tr, lid.tr, [0, 0, height]);
+      break;
+    case 1: // down
+      vec3.add(lid.br, lid.br, [0, 0, height]);
+      vec3.add(lid.bl, lid.bl, [0, 0, height]);
+      break;
+    case 2: // right
+      vec3.add(lid.tl, lid.tl, [0, 0, height]);
+      vec3.add(lid.bl, lid.bl, [0, 0, height]);
+      break;
+    case 3: // left
+      vec3.add(lid.tr, lid.tr, [0, 0, height]);
+      vec3.add(lid.br, lid.br, [0, 0, height]);
+      break;
   }
 }
 
@@ -105,7 +158,7 @@ class Quad {
 
 class Face {
   constructor(face) {
-    this.texture = face & 0x3ff;
+    this.texture = (face & 0x3ff) >>> 0;
     this.flip = !!(face & 0x1000);
     this.flat = !!(face & 0x2000);
     this.rotation = ((face >> 14) >>> 0) * 90;
@@ -117,12 +170,17 @@ function getFace(offset, face, quad) {
     return null;
   }
 
-  if (face.texture === 1023) {
+  if (face.texture === 0x3ff) {
+    return null;
     face.texture = 0;
   }
 
+  if (face.texture > 992) {
+    return null;
+  }
+
   if (face.flat) {
-    // face.texture = 0;
+    //face.texture = 0;
   }
 
   const textureOffset = vec2.create();
@@ -149,12 +207,13 @@ function getFace(offset, face, quad) {
 
   vertexes.forEach((vertex, i) => {
     vec2.add(vertex.texcoord, vertex.texcoord, [-TWW / 2, -TWW / 2]);
-    vec2.transformMat2d(vertex.texcoord, vertex.texcoord, rotationMat);
-    vec2.add(vertex.texcoord, vertex.texcoord, [TWW / 2, TWW / 2]);
 
+    vec2.transformMat2d(vertex.texcoord, vertex.texcoord, rotationMat);
     if (face.flip) {
       vec2.transformMat2d(vertex.texcoord, vertex.texcoord, flipMat);
     }
+
+    vec2.add(vertex.texcoord, vertex.texcoord, [TWW / 2, TWW / 2]);
 
     vec2.add(vertex.texcoord, vertex.texcoord, textureOffset);
 
@@ -171,6 +230,7 @@ function getFace(offset, face, quad) {
 }
 
 function getBlock(block, offset) {
+  const groundType = (block.slopeType && 0b11) >>> 0;
   const slopeType = (block.slopeType >> 2) >>> 0;
   const lid = buildLid(slopeType);
 
@@ -235,7 +295,7 @@ function getBlock(block, offset) {
   return flatten(quads.filter(quad => !!quad).map(quad => quad.getVertexes()));
 }
 
-function constructLid(slope, numLevels) {
+function constructLid(slope, numLevels, diagonal = false) {
   if(slope === 0) {
     return [
       [0, 0, 0],
@@ -256,24 +316,12 @@ function constructLid(slope, numLevels) {
     br: [1, 1, low],
   };
 
-  // this is weird, everything seems to be mirrored and upside down... :/
-  switch (Math.floor(slope / numLevels)) {
-    case 0: // up
-      vec3.add(lid.tl, lid.tl, [0, 0, height]);
-      vec3.add(lid.tr, lid.tr, [0, 0, height]);
-      break;
-    case 1: // down
-      vec3.add(lid.br, lid.br, [0, 0, height]);
-      vec3.add(lid.bl, lid.bl, [0, 0, height]);
-      break;
-    case 2: // right
-      vec3.add(lid.tl, lid.tl, [0, 0, height]);
-      vec3.add(lid.bl, lid.bl, [0, 0, height]);
-      break;
-    case 3: // left
-      vec3.add(lid.tr, lid.tr, [0, 0, height]);
-      vec3.add(lid.br, lid.br, [0, 0, height]);
-      break;
+  const direction = Math.floor(slope / numLevels);
+
+  if (diagonal) {
+    makeDiagonalSlope(direction, lid, height);
+  } else {
+    makeRegularSlope(direction, lid, height);
   }
 
   return [lid.tl, lid.tr, lid.br, lid.bl];
