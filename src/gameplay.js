@@ -31,6 +31,11 @@ class Player {
   }
 }
 
+const RUN_SPEED = 4.0;
+const WALK_SPEED = 2.0;
+const TURN_SPEED = 0.5;
+const BACKWARD_SPEED = 1.0;
+
 export default
 class Gameplay extends GameState {
   constructor(game, level) {
@@ -90,25 +95,20 @@ class Gameplay extends GameState {
       return;
     }
 
-    const forwardSpeed = this.input.isDown(KEYS.SHIFT) ? 4.0 : 2.0;
-    const backwardSpeed = 1.0;
-    const turnSpeed = 3.0;
-
     if (this.input.isDown(KEYS.W)) {
-    console.log(this.input.keys);
-      this.player.move(forwardSpeed * delta);
-    }
-
-    if (this.input.isDown(KEYS.S)) {
-      this.player.move(backwardSpeed * delta);
+      const isRunning = this.input.isDown(KEYS.SHIFT);
+      const speed = isRunning ? RUN_SPEED : WALK_SPEED;
+      this.player.move(speed * delta);
+    } else if (this.input.isDown(KEYS.S)) {
+      this.player.move(BACKWARD_SPEED * delta);
     }
 
     if (this.input.isDown(KEYS.A)) {
-      this.player.turn(turnSpeed * delta);
+      this.player.turn(TURN_SPEED * delta);
     }
 
     if (this.input.isDown(KEYS.D)) {
-      this.player.turn(-turnSpeed * delta);
+      this.player.turn(-TURN_SPEED * delta);
     }
 
     if (this.input.isDown(KEYS.UP)) {
