@@ -19,18 +19,35 @@ function initGL(canvas) {
   }
 }
 
+function resize(canvas) {
+  const realToCSSPixels = window.devicePixelRatio;
+
+  const displayWidth  = Math.floor(window.innerWidth * realToCSSPixels);
+  const displayHeight = Math.floor(window.innerWidth * realToCSSPixels);
+
+  if (canvas.width  !== displayWidth || canvas.height !== displayHeight) {
+    canvas.width  = displayWidth;
+    canvas.height = displayHeight;
+  }
+}
+
 function createFullscreenCanvas(zIndex = 0) {
   const canvas = document.createElement('canvas');
   canvas.id = `canvas-${zIndex}`;
   canvas.style.position = 'fixed';
   canvas.style.top = canvas.style.right = canvas.style.bottom = canvas.style.left = 0;
   canvas.style.height = canvas.style.width = '100%';
-  canvas.width = window.innerWidth * 2;
-  canvas.height = window.innerHeight * 2;
+  canvas.width = window.innerWidth * window.devicePixelRatio;
+  canvas.height = window.innerHeight * window.devicePixelRatio;
   canvas.style.zIndex = zIndex;
   //canvas.style.opacity = 0;
   //canvas.style.transition = 'opacity .2s, display .2s';
   document.body.appendChild(canvas);
+
+  window.addEventListener('resize', () => {
+    resize(canvas);
+  });
+
   return canvas;
 }
 
@@ -52,8 +69,8 @@ function setupControls() {
   // gl.clearColor(0.93, 0.94, 0.91, 1.0);
   gl.clearColor(0.0, 0.94, 0.91, 1.0);
   gl.enable(gl.DEPTH_TEST);
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  //gl.enable(gl.BLEND);
+  //gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   gl.cullFace(gl.FRONT_AND_BACK);
 
   return { gl, input };

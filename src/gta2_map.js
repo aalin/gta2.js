@@ -59,7 +59,7 @@ function buildLid(slopeType) {
     case slopeType >= 41 && slopeType <= 44:
       return constructLid(slopeType - 41, 1);
     case slopeType >= 45 && slopeType <= 48:
-      //return constructLid(slopeType - 44, 1, true);
+      return constructLid(slopeType - 44, 1, true);
     default:
       return constructLid(0, 0);
   }
@@ -229,6 +229,42 @@ function getFace(offset, face, quad) {
   return new Quad(vertexes);
 }
 
+function buildTriangleBlock(offset, faces, lid, direction) {
+  console.log(faces, direction);
+  return [
+  ];
+}
+
+function buildSquareBlock(offset, faces, lid) {
+  return [
+    getFace(offset, faces[0], [
+      [0, 1, -1],
+      [1, 1, -1],
+      lid.br,
+      lid.bl,
+    ]),
+    getFace(offset, faces[1], [
+      [1, 1, -1],
+      [1, 0, -1],
+      lid.tr,
+      lid.br
+    ]),
+    getFace(offset, faces[2], [
+      [0, 0, -1],
+      [1, 0, -1],
+      lid.tr,
+      lid.tl,
+    ]),
+    getFace(offset, faces[3], [
+      [0, 0, -1],
+      [0, 1, -1],
+      lid.bl,
+      lid.tl,
+    ]),
+    getFace(offset, faces[4], [lid.tl, lid.tr, lid.br, lid.bl]),
+  ];
+}
+
 function getBlock(block, offset) {
   const groundType = (block.slopeType && 0b11) >>> 0;
   const slopeType = (block.slopeType >> 2) >>> 0;
@@ -242,34 +278,9 @@ function getBlock(block, offset) {
     block.lid
   ].map(face => new Face(face));
 
-  let quads = [
-    getFace(offset, faces[0], [
-      [0, 1, -1],
-      [1, 1, -1],
-      lid[2],
-      lid[3],
-    ]),
-    getFace(offset, faces[1], [
-      [1, 1, -1],
-      [1, 0, -1],
-      lid[1],
-      lid[2]
-    ]),
-    getFace(offset, faces[2], [
-      [0, 0, -1],
-      [1, 0, -1],
-      lid[1],
-      lid[0],
-    ]),
-    getFace(offset, faces[3], [
-      [0, 0, -1],
-      [0, 1, -1],
-      lid[3],
-      lid[0],
-    ]),
-    getFace(offset, faces[4], lid),
-  ];
-
+  const quads = (lid.diagonal !== false)
+    ? buildTriangleBlock(offset, faces, lid, lid.diagonal)
+    : buildSquareBlock(offset, faces, lid);
 
   function replaceFlatness(index1, index2) {
     if (faces[index1].flat && !faces[index2].flat && faces[index2].texture) {
@@ -297,34 +308,36 @@ function getBlock(block, offset) {
 
 function constructLid(slope, numLevels, diagonal = false) {
   if(slope === 0) {
-    return [
-      [0, 0, 0],
-      [1, 0, 0],
-      [1, 1, 0],
-      [0, 1, 0]
-    ];
+    return {
+      tl: [0, 0, 0],
+      tr: [1, 0, 0],
+      bl: [0, 1, 0],
+      br: [1, 1, 0],
+      diagonal: false
+    };
   }
 
   const height = 1.0 / numLevels;
   const level = slope % numLevels;
   const low = height * level - height * numLevels;
 
+  const direction = Math.floor(slope / numLevels);
+
   let lid = {
     tl: [0, 0, low],
     tr: [1, 0, low],
     bl: [0, 1, low],
     br: [1, 1, low],
+    diagonal: false
   };
 
-  const direction = Math.floor(slope / numLevels);
-
   if (diagonal) {
-    makeDiagonalSlope(direction, lid, height);
-  } else {
-    makeRegularSlope(direction, lid, height);
+    lid.diagonal = direction;
   }
 
-  return [lid.tl, lid.tr, lid.br, lid.bl];
+  makeRegularSlope(direction, lid, height);
+
+  return lid;
 }
 
 function eachSlice(array, size, callback) {
@@ -376,15 +389,6 @@ function flatten(a) {
   }
 
   return a;
-}
-
-function quad(x, y, z) {
-  return [
-    [x, y, z],
-    [x, y+1, z],
-    [x+1, y+1, z],
-    [x+1, y, z],
-  ];
 }
 
 class ArrayWriter {

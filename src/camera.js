@@ -30,7 +30,7 @@ export default class Camera {
   }
 
   lookat(gl, eye, center, up) {
-    gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const pMatrix = mat4.create();
     mat4.perspective(pMatrix, 45.0, 1.0, Z_NEAR, Z_FAR);

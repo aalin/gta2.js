@@ -1,7 +1,7 @@
 const FRAME_LENGTH = 1000.0 / 60.0;
 
 const INITIAL_COUNT = 1;
-const MAX_COUNT = 20;
+const MAX_COUNT = 100;
 
 export default
 class Counter {
