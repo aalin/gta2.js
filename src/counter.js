@@ -1,7 +1,7 @@
 const FRAME_LENGTH = 1000.0 / 60.0;
 
 const INITIAL_COUNT = 1;
-const MAX_COUNT = 1000;
+const MAX_COUNT = 20;
 
 export default
 class Counter {
@@ -17,10 +17,14 @@ class Counter {
   }
 
   getAverageDelta() {
-    return this._deltas.reduce((sum, x) => sum + x, 0.0) / this._deltas.length;
+    return this.getTotalDelta() / this._deltas.length;
   }
 
-  update() {
+  getTotalDelta() {
+    return this._deltas.reduce((sum, x) => sum + x, 0.0);
+  }
+
+  update(reset = false) {
     const now = new Date();
     const delta = now - this._lastUpdate;
     this._lastUpdate = now;
@@ -29,7 +33,7 @@ class Counter {
       this._deltas.push(delta);
     }
 
-    const doUpdate = (this._i++ % this._count) === 0;
+    const doUpdate = reset || (++this._i % this._count) === 0;
 
     if (doUpdate && this._deltas.length) {
       this._recalibrate();
@@ -39,7 +43,8 @@ class Counter {
   }
 
   _recalibrate() {
-    const mul = this.getAverageDelta() / FRAME_LENGTH;
+    const avg = this.getTotalDelta();
+    const mul = FRAME_LENGTH / avg;
     let count = Math.ceil(this._count * mul) || 0;
     this._count = Math.min(Math.max(1, count), MAX_COUNT);
     this._deltas = [];
