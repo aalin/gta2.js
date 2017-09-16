@@ -138,7 +138,7 @@ function* loadSprites(gl, style, textureIndex) {
 
   const texture = new Texture(gl, textureIndex, canvas);
   console.log('gl.MAX_TEXTURE_SIZE', gl.getParameter(gl.MAX_TEXTURE_SIZE));
-  document.body.appendChild(canvas);
+  // document.body.appendChild(canvas);
 
   yield { texture };
 }
