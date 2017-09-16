@@ -1,6 +1,45 @@
 import Texture from './texture';
 import { downloadAsset } from './utils';
 import loadChunks from './load_chunks';
+import { StructReader } from './binary_buffer';
+
+const SpriteEntry = new StructReader({
+  ptr: '32LE',
+  w: '8LE',
+  h: '8LE',
+  pad: '16LE',
+});
+
+const SpriteBase = new StructReader({
+  car: '16LE',
+  ped: '16LE',
+  codeObj: '16LE',
+  mapObj: '16LE',
+  user: '16LE',
+  font: '16LE',
+});
+
+function OffsetedPaletteBase(pb) {
+  let acc = 0;
+
+  for (let key in pb) {
+    if (pb.hasOwnProperty(key)) {
+      this[key] = acc;
+      acc += pb[key];
+    }
+  }
+}
+
+const PaletteBase = new StructReader({
+  tile: '16LE',
+  sprite: '16LE',
+  carRemap: '16LE',
+  pedRemap: '16LE',
+  codeObjRemap: '16LE',
+  mapObjRemap: '16LE',
+  userRemap: '16LE',
+  fontRemap: '16LE',
+});
 
 function result(buffer, result) {
   return {
@@ -10,13 +49,19 @@ function result(buffer, result) {
   };
 }
 
-function getPaletteValue(paletteData, paletteIndex, colorIndex) {
+function getPaletteIndex(paletteIndex, colorIndex) {
   const pageStart = Math.floor((paletteIndex / 64)) * 64 * 256 * 4;
-  const idx = pageStart + (paletteIndex % 64) + colorIndex * 64;
+  return pageStart + (paletteIndex % 64) + colorIndex * 64;
+}
+
+function getPaletteValue(paletteData, paletteIndex, colorIndex) {
+  const idx = getPaletteIndex(paletteIndex, colorIndex)
   const value = paletteData[idx];
+
   if (value === undefined) {
     throw `value: ${value}`;
   }
+
   return value;
 }
 
@@ -47,14 +92,65 @@ function extractColor(integer) {
 
 let ADDED = false;
 
+function* loadSprites(gl, style, textureIndex) {
+  const textureSize = 2048;
+  const pageSize = 256;
+
+  const { canvas, ctx } = createTextureCanvas(textureSize);
+
+  for (let pageNum = 0; pageNum < 32; pageNum++) {
+    const i = Math.floor(pageNum % 8) * 256;
+    const j = Math.floor(pageNum / 8) * 256;
+
+    const pageOffset = 256 * 256 * pageNum;
+    const paletteIndex = style.paletteIndex[pageNum];
+
+    const x = 256 * (pageNum % 8);
+    const y = 256 * (Math.floor(pageNum / 8) % 8);
+
+    for(let pageY = 0; pageY < 256; pageY++) {
+      for(let pageX = 0; pageX < 256; pageX++) {
+        const px = i + pageX;
+        const py = j + pageY;
+
+        const idx = (y + pageY) * 256 + x + pageX;
+        const c = style.spriteGraphics[pageOffset + idx];
+
+        if (!c) {
+          putPixel(ctx, px, py, [0, 0, 0, 0]);
+        } else {
+          const idx = getPaletteIndex(paletteIndex, c) + style.paletteBase.tile * 256;
+
+          const rgba = style.physicalPalettes[idx];
+          putPixel(ctx, px, py, extractColor(rgba | 0xff000000));
+        }
+      }
+    }
+
+    yield { _type: `${pageNum}/32`, _progress: pageNum, _max: 32 };
+  }
+
+  canvas.id = `canvas-2`;
+  canvas.style.position = 'fixed';
+  canvas.style.top = canvas.style.right = canvas.style.bottom = canvas.style.left = 0;
+  canvas.style.height = canvas.style.width = `${textureSize}px`;
+  canvas.style.zIndex = 2;
+
+  const texture = new Texture(gl, textureIndex, canvas);
+  console.log('gl.MAX_TEXTURE_SIZE', gl.getParameter(gl.MAX_TEXTURE_SIZE));
+  document.body.appendChild(canvas);
+
+  yield { texture };
+}
+
 function* loadTextures(gl, style, textureIndex) {
-  const textureSize = 4096;
+  const textureSize = 2048;
   const pageSize = 256;
   const divisor = 992;
   const squared = Math.ceil(Math.sqrt(992));
   const tileSize = 64;
 
-  const { canvas, ctx } = createTextureCanvas(2048);
+  const { canvas, ctx } = createTextureCanvas(textureSize);
 
   for (let tileIndex = 0; tileIndex < 992; tileIndex++) {
     const i = Math.floor(tileIndex % 32) * 64;
@@ -69,8 +165,6 @@ function* loadTextures(gl, style, textureIndex) {
 
     for(let tileY = 0; tileY < 64; tileY++) {
       for(let tileX = 0; tileX < 64; tileX++) {
-        const paletteIndex = style.paletteIndex[tileIndex];
-
         const px = i + tileX;
         const py = j + tileY;
 
@@ -102,6 +196,16 @@ function* loadTextures(gl, style, textureIndex) {
   yield { texture };
 }
 
+const CHUNKS = {
+  PALETTE_INDEX: 'PALX',
+  PHYSICAL_PALETTES: 'PPAL',
+  PALETTE_BASE: 'PALB',
+  TILE: 'TILE',
+  SPRITE_GRAPHICS: 'SPRG',
+  SPRITE_INDEX: 'SPRX',
+  SPRITE_BASES: 'SPRB',
+};
+
 function* parseStyle(data) {
   for (let chunk of loadChunks(data, 'GBST', 700)) {
     console.log('chunk', chunk);
@@ -110,28 +214,26 @@ function* parseStyle(data) {
     yield { _type: type, _progress: buffer.pos, _max: buffer.length };
 
     switch (type) {
-      case 'PALX': // Palette index
+      case CHUNKS.PALETTE_INDEX:
         yield { paletteIndex: buffer.read16arrayLE(size) };
         break;
-      case 'PPAL': // Physical palettes
+      case CHUNKS.PHYSICAL_PALETTES:
         yield { physicalPalettes: buffer.read32arrayLE(size) };
         break;
-      case 'PALB': // Palette base
-        yield {
-          paletteBase: {
-            tile: buffer.read16(),
-            sprite: buffer.read16(),
-            carRemap: buffer.read16(),
-            pedRemap: buffer.read16(),
-            codeObjRemap: buffer.read16(),
-            mapObjRemap: buffer.read16(),
-            userRemap: buffer.read16(),
-            fontRemap: buffer.read16(),
-          }
-        };
+      case CHUNKS.PALETTE_BASE:
+        yield { paletteBase: new OffsetedPaletteBase(buffer.readStruct(PaletteBase)) };
         break;
-      case 'TILE': // Tile
+      case CHUNKS.TILE:
         yield { tiles: buffer.read8arrayLE(size) };
+        break;
+      case CHUNKS.SPRITE_GRAPHICS:
+        yield { spriteGraphics: buffer.read8arrayLE(size) };
+        break;
+      case CHUNKS.SPRITE_INDEX:
+        yield { spriteIndex: buffer.read8arrayLE(size) };
+        break;
+      case CHUNKS.SPRITE_BASES:
+        yield { spriteBases: buffer.read8arrayLE(size) };
         break;
       default:
         console.log(`Skipping ${size} bytes on "${type}", offset: ${buffer.pos}`);
@@ -178,6 +280,16 @@ export default class GTA2Style {
       }
 
       console.log("Number of textures", textures.length);
+
+      for (let details of loadSprites(gl, style, textureIndex + 1)) {
+        if (details._progress) {
+          yield progress(details._progress, details._max, `Loading textures (${details._type})`)
+        }
+
+        if (details.texture) {
+          textures.push(details.texture);
+        }
+      }
 
       yield done(new GTA2Style(textures));
     }
