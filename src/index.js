@@ -86,6 +86,7 @@ function setupTextCanvas() {
 class Game {
   constructor(level) {
     this.ticks = 0;
+    this.delta = 0;
     this.state = {};
     this.nextState = {};
     this.nextStateCallbacks = [];
@@ -202,7 +203,7 @@ class Game {
   }
 
   update() {
-    this.states[0] && this.states[0].update(this.ticks);
+    this.states[0] && this.states[0].update(this.ticks, this.delta / 1000.0);
 
     const { input } = this.controls;
 

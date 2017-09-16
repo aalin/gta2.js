@@ -27,8 +27,8 @@ class StateWrapper {
     this[_state].deactivate();
   }
 
-  update(ticks) {
-    this[_state].update(ticks);
+  update(ticks, delta) {
+    this[_state].update(ticks, delta);
     this[_state]._updateState();
   }
 
