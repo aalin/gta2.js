@@ -45,6 +45,7 @@ function download(path, onProgress = null) {
     const req = new XMLHttpRequest();
 
     req.open('GET', path, true);
+    req.withCredentials = false;
     req.responseType = 'arraybuffer';
 
     if (onProgress) {

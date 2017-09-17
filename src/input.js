@@ -17,11 +17,13 @@ class Input {
 
     window.addEventListener('keydown', (e) => {
       e.preventDefault();
+      console.log('Pressed', e.keyCode);
       this.keys.add(e.keyCode);
     });
 
     window.addEventListener('keyup', (e) => {
       e.preventDefault();
+      console.log('Released', e.keyCode);
       this.keys.delete(e.keyCode);
     });
   }

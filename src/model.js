@@ -26,7 +26,7 @@ class IndexBuffer {
 }
 
 export default class Model {
-  constructor(gl, drawMode) {
+  constructor(gl, drawMode = gl.TRIANGLES) {
     this.gl = gl;
     this.drawMode = drawMode;
     this.buffers = [];

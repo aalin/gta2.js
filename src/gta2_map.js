@@ -56,7 +56,7 @@ function buildLid(slopeType) {
     case slopeType >= 41 && slopeType <= 44:
       return constructLid(slopeType - 41, 1);
     case slopeType >= 45 && slopeType <= 48:
-      return constructLid(slopeType - 44, 1, true);
+      return constructLid(slopeType - 45, 0, true);
     default:
       return constructLid(0, 0);
   }
@@ -130,6 +130,10 @@ class Triangle {
   constructor(vertexes) {
     this.vertexes = vertexes;
   }
+
+  getVertexes() {
+    return this.vertexes;
+  }
 }
 
 class Quad {
@@ -145,7 +149,7 @@ class Quad {
         vertexes[2],
         vertexes[3]
       ])
-    ]
+    ];
   }
 
   getVertexes() {
@@ -162,7 +166,7 @@ class Face {
   }
 }
 
-function getFace(offset, face, quad) {
+function getFace(offset, face, verts) {
   if (face.texture === 0) {
     return null;
   }
@@ -176,8 +180,8 @@ function getFace(offset, face, quad) {
     return null;
   }
 
-  if (face.flat) {
-    //face.texture = 0;
+  if (face.hide) {
+    return null;
   }
 
   const textureOffset = vec2.create();
@@ -187,10 +191,10 @@ function getFace(offset, face, quad) {
     (Math.floor(face.texture / 32) * 64) / 2048.0,
   ]);
 
-  const vertexes = Array.from({ length: 4 }, (_, i) => {
+  const vertexes = Array.from(verts, (v, i) => {
     const position = vec3.create();
     const texcoord = vec2.create();
-    vec3.add(position, position, quad[i]);
+    vec3.add(position, position, v);
     vec2.add(texcoord, texcoord, TEXCOORDS[i]);
 
     return new Vertex(position, texcoord);
@@ -224,43 +228,140 @@ function getFace(offset, face, quad) {
     vec3.add(vertex.position, vertex.position, offset);
   });
 
-  return new Quad(vertexes);
+  if (vertexes.length === 4) {
+    return new Quad(vertexes);
+  } else {
+    return new Triangle(vertexes);
+  }
 }
 
 function buildTriangleBlock(offset, faces, lid, direction) {
-  console.log(faces, direction);
-  return [
+  const result = [];
+
+  const faces2 = [faces.top, faces.right, faces.bottom, faces.left];
+  const visibleCornerIndex = faces2.findIndex(face => face.texture !== 0);
+
+  if (visibleCornerIndex === -1) {
+    return [];
+  }
+
+  const lidVerts = [];
+
+  switch (direction) {
+    case 0: // Up left
+      lidVerts.push(
+        lid.tl,
+        lid.tr,
+        lid.bl,
+      );
+      break;
+    case 1: // Up right
+      lidVerts.push(
+        lid.tl,
+        lid.tr,
+        lid.bl,
+      );
+      break;
+    case 2: // Down left
+      lidVerts.push(
+        lid.tl,
+        lid.tr,
+        lid.bl,
+      );
+      break;
+    case 3: // Down right
+      lidVerts.push(
+        lid.tl,
+        lid.tr,
+        lid.bl,
+      );
+      break;
+  }
+
+  result.push(
+    getFace(offset, faces.lid, lidVerts)
+  );
+
+  /*
+  let wallVerts = [
+    parts[(visibleCornerIndex + 0) % 4],
+    parts[(visibleCornerIndex + 1) % 4],
+    parts[(visibleCornerIndex + 1) % 4].slice(0, 2).concat([-1]),
+    parts[(visibleCornerIndex + 0) % 4].slice(0, 2).concat([-1]),
   ];
+
+  result.push(
+    getFace(offset, faces2[visibleCornerIndex], wallVerts)
+  );
+  */
+
+  return result;
 }
 
 function buildSquareBlock(offset, faces, lid) {
-  return [
-    getFace(offset, faces[0], [
+  const result = [];
+
+  if (faces.bottom.flat) {
+    faces.bottom.texture = 0;
+  }
+
+  if (faces.top.flat && !faces.bottom.flat) {
+    faces.top.texture = 0;
+  }
+
+  // Top
+  result.push(
+    getFace(offset, faces.bottom, [
       [0, 1, -1],
       [1, 1, -1],
       lid.br,
       lid.bl,
     ]),
-    getFace(offset, faces[1], [
-      [1, 1, -1],
-      [1, 0, -1],
-      lid.tr,
-      lid.br
-    ]),
-    getFace(offset, faces[2], [
-      [0, 0, -1],
-      [1, 0, -1],
+  );
+
+  // Bottom
+  result.push(
+    getFace(offset, faces.top, [
       lid.tr,
       lid.tl,
-    ]),
-    getFace(offset, faces[3], [
+      [0, 0, -1],
+      [1, 0, -1],
+    ])
+  );
+
+  if (faces.left.flat && !faces.right.flat) {
+    faces.left.texture = 0;
+  }
+
+  // Left
+  result.push(
+    getFace(offset, faces.left, [
       [0, 0, -1],
       [0, 1, -1],
       lid.bl,
       lid.tl,
     ]),
-    getFace(offset, faces[4], [lid.tl, lid.tr, lid.br, lid.bl]),
-  ];
+  );
+
+  if (faces.right.flat && !faces.left.flat) {
+    faces.right.texture = 0;
+  }
+
+  // Right
+  result.push(
+    getFace(offset, faces.right, [
+      [1, 1, -1],
+      [1, 0, -1],
+      lid.tr,
+      lid.br
+    ])
+  );
+
+  result.push(
+    getFace(offset, faces.lid, [lid.tl, lid.tr, lid.br, lid.bl]),
+  );
+
+  return result;
 }
 
 function getBlock(block, offset) {
@@ -268,44 +369,23 @@ function getBlock(block, offset) {
   const slopeType = (block.slopeType >> 2) >>> 0;
   const lid = buildLid(slopeType);
 
-  let faces = [
-    block.bottom,
-    block.right,
-    block.top,
-    block.left,
-    block.lid
-  ].map(face => new Face(face));
+  const faces = {
+    bottom: new Face(block.bottom),
+    right: new Face(block.right),
+    top: new Face(block.top),
+    left: new Face(block.left),
+    lid: new Face(block.lid)
+  };
 
   const quads = (lid.diagonal !== false)
     ? buildTriangleBlock(offset, faces, lid, lid.diagonal)
     : buildSquareBlock(offset, faces, lid);
 
-  function replaceFlatness(index1, index2) {
-    if (faces[index1].flat && !faces[index2].flat && faces[index2].texture) {
-      quads[index1] = null;
-    }
-    /*
-    if (faces[index1].flat && !faces[index2].flat && faces[index2].texture) {
-      if (quads[index1] && quads[index2]) {
-        quads[index1].setPositionsFrom(quads[index2]);
-        quads[index2] = null;
-      }
-    }
-    */
-  }
-
-  /*
-  replaceFlatness(2, 0);
-  replaceFlatness(0, 2);
-  replaceFlatness(1, 3);
-  replaceFlatness(3, 1);
-  */
-
   return flatten(quads.filter(quad => !!quad).map(quad => quad.getVertexes()));
 }
 
 function constructLid(slope, numLevels, diagonal = false) {
-  if(slope === 0) {
+  if (slope === 0 && numLevels === 0) {
     return {
       tl: [0, 0, 0],
       tr: [1, 0, 0],
@@ -315,7 +395,17 @@ function constructLid(slope, numLevels, diagonal = false) {
     };
   }
 
-  const height = 1.0 / numLevels;
+  if (numLevels === 0 && diagonal) {
+    return {
+      tl: [0, 0, 0],
+      tr: [1, 0, 0],
+      bl: [0, 1, 0],
+      br: [1, 1, 0],
+      diagonal: slope
+    };
+  }
+
+  const height = numLevels > 0 ? 1.0 / numLevels : 1;
   const level = slope % numLevels;
   const low = height * level - height * numLevels;
 
@@ -502,7 +592,7 @@ class GTA2Map {
     this.models = models;
   }
 
-  draw(gl, shader, matrices, style = null) {
+  draw(gl, shader, matrices, playerPosition, style = null) {
     shader.use();
     gl.uniformMatrix4fv(shader.uniform('uPMatrix'), false, matrices.p);
     gl.uniformMatrix4fv(shader.uniform('uVMatrix'), false, matrices.v);
@@ -516,7 +606,12 @@ class GTA2Map {
       }
     }
 
-    this.models.forEach((model) => {
+    const [px, py] = playerPosition;
+    const square = Math.sqrt(this.models.length);
+
+    this.models.forEach((model, i) => {
+      const x = (i % square);
+      const y = Math.floor(i / square);
       model.draw(shader);
     });
   }

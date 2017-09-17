@@ -9,33 +9,54 @@ import { mat4 } from 'gl-matrix';
 import { KEYS } from './input';
 import Player from './player';
 
+import vertexShader from './shaders/default.vert';
+import fragmentShader from './shaders/default.frag';
+
+import playerVertexShader from './shaders/player.vert';
+import playerFragmentShader from './shaders/player.frag';
+
+const LEVEL_BASE_URI = process.env.NODE_ENV === 'production' ? 'http://gtamp.com/mapscript/_singleplayer/04_gta2files/extras/singleplayer/data' : '/levels';
+
 export default
 class Gameplay extends GameState {
   constructor(game, level) {
     super(game);
 
-    this.addDependency('shader', () => (
+    this.addDependency('worldShader', () => (
       Shader.load(
         this.gl,
-        () => System.import("./shaders/default.vert"),
-        () => System.import("./shaders/default.frag"),
+        () => Promise.resolve(vertexShader),
+        () => Promise.resolve(fragmentShader),
+        // () => System.import("./shaders/default.vert"),
+        // () => System.import("./shaders/default.frag"),
+      )
+    ));
+
+    this.addDependency('playerShader', () => (
+      Shader.load(
+        this.gl,
+        () => Promise.resolve(playerVertexShader),
+        () => Promise.resolve(playerFragmentShader),
+        // () => System.import("./shaders/default.vert"),
+        // () => System.import("./shaders/default.frag"),
       )
     ));
 
     this.addDependency('blobStore', () => BlobStore.load('data'));
 
-    this.addDependency('style', () => GTA2Style.load(this.gl, `/levels/${level}.sty`));
+    this.addDependency('style', () => GTA2Style.load(this.gl, `${LEVEL_BASE_URI}/${level}.sty`));
     this.addDependency('map', () => (
       GTA2Map.load(
         this.gl,
-        `/levels/${level}.gmp`
+        `${LEVEL_BASE_URI}/${level}.gmp`
       )
     ));
 
     this.level = level;
 
     this.camera = new Camera();
-    this.player = new Player(-128, 128);
+    this.player = new Player(this.gl, -128, 128);
+    this.skew = 0.0;
   }
 
   mount() {
@@ -94,12 +115,20 @@ class Gameplay extends GameState {
     }
     if (this.input.isDown(KEYS.RIGHT)) {
     }
+
+    if (this.input.isDown(90)) {
+      this.skew += delta * 10.0;
+    }
+
+    if (this.input.isDown(88)) {
+      this.skew -= delta * 10.0;
+    }
   }
 
   draw(ticks) {
-    const { map, shader, style } = this.resources;
+    const { map, worldShader, playerShader, style } = this.resources;
 
-    if (!(map && shader && style)) {
+    if (!(map && worldShader && playerShader && style)) {
       return;
     }
 
@@ -112,7 +141,7 @@ class Gameplay extends GameState {
     const eye = [
       this.player.position[0],
       this.player.position[1],
-      20.0
+      20 + this.skew
     ];
 
     const lookat = this.player.position;
@@ -130,6 +159,7 @@ class Gameplay extends GameState {
     };
 
     //console.log(map);
-    map.draw(this.gl, shader, matrices, style);
+    map.draw(this.gl, worldShader, matrices, this.player.position, style);
+    this.player.draw(this.gl, playerShader, matrices);
   }
 }

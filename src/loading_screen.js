@@ -45,7 +45,7 @@ class LoadingScreen extends GameState {
       this.game.draw2d((ctx, canvas) => {
         const radius = 5.0;
         ctx.textAlign = 'left';
-        ctx.fillStyle = '#000000';
+        ctx.fillStyle = '#fff';
         ctx.font = '50px courier new';
         ctx.fillText(this.state.loadingText, 200, canvas.height / 2);
       });

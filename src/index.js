@@ -66,8 +66,7 @@ function setupControls() {
   const gl = initGL(canvas);
   const input = new Input();
 
-  // gl.clearColor(0.93, 0.94, 0.91, 1.0);
-  gl.clearColor(0.0, 0.94, 0.91, 1.0);
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);
   gl.enable(gl.DEPTH_TEST);
   //gl.enable(gl.BLEND);
   //gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);

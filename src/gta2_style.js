@@ -281,6 +281,7 @@ export default class GTA2Style {
 
       console.log("Number of textures", textures.length);
 
+      /*
       for (let details of loadSprites(gl, style, textureIndex + 1)) {
         if (details._progress) {
           yield progress(details._progress, details._max, `Loading textures (${details._type})`)
@@ -290,6 +291,7 @@ export default class GTA2Style {
           textures.push(details.texture);
         }
       }
+      */
 
       yield done(new GTA2Style(textures));
     }
