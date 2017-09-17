@@ -1,7 +1,9 @@
 const path = require('path');
 const webpack = require('webpack');
 
-module.exports = {
+const MinifyPlugin = require("babel-minify-webpack-plugin");
+
+let config = {
   entry: './src/index',
   devtool: 'source-map',
   target: 'web',
@@ -15,6 +17,10 @@ module.exports = {
   plugins: [
     new webpack.ProvidePlugin({
       'window.decomp': 'poly-decomp' // matterjs
+    }),
+    new webpack.DefinePlugin({
+      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
+      'process.env.DEBUG': JSON.stringify(process.env.DEBUG)
     })
   ],
   module: {
@@ -39,7 +45,11 @@ module.exports = {
     ],
 
     extensions: ['.js']
-  },
-
-//   plugins: [ new BabiliPlugin({}, {}) ]
+  }
 };
+
+if (process.env.NODE_ENV === 'production') {
+  config.plugins.push(new MinifyPlugin());
+}
+
+module.exports = config;
