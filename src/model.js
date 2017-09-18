@@ -31,6 +31,16 @@ export default class Model {
     this.drawMode = drawMode;
     this.buffers = [];
     this.indices = null;
+    this.data = new Map();
+  }
+
+  setAttr(name, value) {
+    this.data.set(name, value);
+    return this;
+  }
+
+  getAttr(name) {
+    return this.data.get(name);
   }
 
   // attrib: aVertexPosition, aColor, aTexcoord

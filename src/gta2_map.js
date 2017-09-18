@@ -608,11 +608,16 @@ class GTA2Map {
 
     const [px, py] = playerPosition;
     const square = Math.sqrt(this.models.length);
+    const mul = 256 / square;
 
     this.models.forEach((model, i) => {
-      const x = (i % square);
-      const y = Math.floor(i / square);
-      model.draw(shader);
+      const x = Math.floor((i % square) * mul) + mul / 2;
+      const y = Math.floor(i / square) * mul + mul / 2;
+      const distance = Math.sqrt((px - x) ** 2 + (py - y) ** 2);
+
+      if (distance < 50) {
+        model.draw(shader);
+      }
     });
   }
 }

@@ -1,8 +1,8 @@
-import { vec3 } from 'gl-matrix';
+import { mat4, vec3 } from 'gl-matrix';
 import Model from './model';
 
-const RUN_SPEED = 4.0;
-const WALK_SPEED = 2.0;
+const RUN_SPEED = 10.0;
+const WALK_SPEED = 4.0;
 const TURN_SPEED = 0.5;
 const BACKWARD_SPEED = -1.0;
 
@@ -10,17 +10,18 @@ export default
 class Player {
   constructor(gl, x, y) {
     this.gl = gl;
-    this.position = vec3.fromValues(x, y, 0.0);
-    this.direction = 0.0;
+    this.position = vec3.fromValues(x, y, 2.0);
+    this.direction = 0.0;;
 
+    const s = 1.0;
     this.model = new Model(gl, gl.TRIANGLES);
     this.model.addBuffer('aVertexPosition', [
-      0, 0, 0,
-      1, 0, 0,
-      1, 1, 0,
-      0, 0, 0,
-      1, 1, 0,
-      0, 1, 0
+      -s, -s, 0,
+      s, -s, 0,
+      s, s, 0,
+      -s, -s, 0,
+      s, s, 0,
+      -s, s, 0
     ], 3);
   }
 
@@ -45,11 +46,13 @@ class Player {
   }
 
   draw(gl, shader, matrices) {
+    const modelMatrix = mat4.create();
+    mat4.translate(modelMatrix, modelMatrix, this.position);
+    mat4.rotate(modelMatrix, modelMatrix, this.direction * Math.PI, [0.0, 0.0, 1.0])
     shader.use();
     gl.uniformMatrix4fv(shader.uniform('uPMatrix'), false, matrices.p);
     gl.uniformMatrix4fv(shader.uniform('uVMatrix'), false, matrices.v);
-    gl.uniformMatrix4fv(shader.uniform('uMMatrix'), false, matrices.m);
-    gl.uniform3fv(shader.uniform('uPlayerPosition'), this.position);
+    gl.uniformMatrix4fv(shader.uniform('uMMatrix'), false, modelMatrix);
     this.model.draw(shader);
   }
 }

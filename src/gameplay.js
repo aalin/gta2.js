@@ -55,8 +55,8 @@ class Gameplay extends GameState {
     this.level = level;
 
     this.camera = new Camera();
-    this.player = new Player(this.gl, -128, 128);
-    this.skew = 0.0;
+    this.player = new Player(this.gl, 128, 128);
+    this.zoom = 0.0;
   }
 
   mount() {
@@ -117,11 +117,11 @@ class Gameplay extends GameState {
     }
 
     if (this.input.isDown(90)) {
-      this.skew += delta * 10.0;
+      this.zoom += delta * 10.0;
     }
 
     if (this.input.isDown(88)) {
-      this.skew -= delta * 10.0;
+      this.zoom -= delta * 10.0;
     }
   }
 
@@ -141,10 +141,14 @@ class Gameplay extends GameState {
     const eye = [
       this.player.position[0],
       this.player.position[1],
-      20 + this.skew
+      20 + this.zoom
     ];
 
-    const lookat = this.player.position;
+    const lookat = [
+      this.player.position[0],
+      this.player.position[1],
+      0
+    ];
 
     const [pMatrix, vMatrix] = this.camera.lookat(this.gl,
       eye,
@@ -160,6 +164,7 @@ class Gameplay extends GameState {
 
     //console.log(map);
     map.draw(this.gl, worldShader, matrices, this.player.position, style);
+
     this.player.draw(this.gl, playerShader, matrices);
   }
 }

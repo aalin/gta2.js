@@ -36,7 +36,6 @@ export default class Camera {
     mat4.perspective(pMatrix, 45.0, 1.0, Z_NEAR, Z_FAR);
     const vMatrix = mat4.create();
     mat4.lookAt(vMatrix, eye, center, up);
-    mat4.scale(vMatrix, vMatrix, [-1.0, 1.0, 1.0]);
     return [pMatrix, vMatrix];
   }
 }
