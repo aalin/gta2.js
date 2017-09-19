@@ -91,7 +91,11 @@ class Gameplay extends GameState {
 
     if (this.input.isDown(KEYS.W)) {
       if (this.input.isDown(KEYS.SHIFT)) {
-        this.player.run(delta);
+        if (this.input.isDown(17)) {
+          this.player.run(delta * 2);
+        } else {
+          this.player.run(delta);
+        }
       } else {
         this.player.walk(delta);
       }

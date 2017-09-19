@@ -56,7 +56,7 @@ function buildLid(slopeType) {
     case slopeType >= 41 && slopeType <= 44:
       return constructLid(slopeType - 41, 1);
     case slopeType >= 45 && slopeType <= 48:
-      return constructLid(slopeType - 45, 0);
+      return constructLid(slopeType - 45, 0, true);
     default:
       return constructLid(0, 0);
   }
@@ -148,7 +148,7 @@ class Face {
   }
 }
 
-function getFace(offset, face, verts) {
+function getFace(offset, face, verts, texcoords = TEXCOORDS) {
   if (face.texture === 0) {
     return null;
   }
@@ -177,7 +177,7 @@ function getFace(offset, face, verts) {
     const position = vec3.create();
     const texcoord = vec2.create();
     vec3.add(position, position, v);
-    vec2.add(texcoord, texcoord, TEXCOORDS[i]);
+    vec2.add(texcoord, texcoord, texcoords[i]);
 
     return new Vertex(position, texcoord);
   });
@@ -198,7 +198,7 @@ function getFace(offset, face, verts) {
     vec2.transformMat2d(vertex.texcoord, vertex.texcoord, rotationMat);
 
     // Pad the texture a little bit so that we don't accidentally sample any neighboring textures
-    vec2.scale(vertex.texcoord, vertex.texcoord, 0.98);
+    // vec2.scale(vertex.texcoord, vertex.texcoord, 0.995);
 
     vec2.add(vertex.texcoord, vertex.texcoord, [TWW / 2, TWW / 2]);
 
@@ -220,65 +220,54 @@ function getFace(offset, face, verts) {
   }
 }
 
+function setLidVerts(lid, indexes, texcoordIndexes = indexes) {
+  const verts = indexes.map(idx => lid[idx]);
+  const texcoords = texcoordIndexes.map(idx => TEXCOORDS[idx]);
+  return { verts, texcoords };
+}
+
+const TRIANGLE_DIRECTION_OFFSETS = [0, 1, 3, 2];
+
+const TRIANGLE_DIRECTION_INDEXES = [
+  [1, 2, 3],
+  [0, 2, 3],
+  [0, 1, 2],
+  [0, 1, 3]
+];
+
 function buildTriangleBlock(offset, faces, lid, direction) {
   const result = [];
 
   const faces2 = [faces.top, faces.right, faces.bottom, faces.left];
   const visibleCornerIndex = faces2.findIndex(face => face.texture !== 0);
 
-  if (visibleCornerIndex === -1) {
-    return [];
-  }
-
-  const lidVerts = [];
-
-  switch (direction) {
-    case 0: // Up left
-      lidVerts.push(
-        lid.tl,
-        lid.br,
-        lid.bl,
-      );
-      break;
-    case 1: // Up right
-      lidVerts.push(
-        lid.tl,
-        lid.bl,
-        lid.br,
-      );
-      break;
-    case 2: // Down left
-      lidVerts.push(
-        lid.tl,
-        lid.bl,
-        lid.br,
-      );
-      break;
-    case 3: // Down right
-      lidVerts.push(
-        lid.tl,
-        lid.bl,
-        lid.br,
-      );
-      break;
-  }
+  const indexes = TRIANGLE_DIRECTION_INDEXES[direction];
+  let lidVerts = setLidVerts(lid, indexes);
 
   result.push(
-    getFace(offset, faces.lid, lidVerts)
+    getFace(offset, faces.lid, lidVerts.verts, lidVerts.texcoords)
   );
 
-  /*
+  if (visibleCornerIndex === -1) {
+    return result;
+  }
+
+  const face = faces2[visibleCornerIndex];
+  const offset2 = TRIANGLE_DIRECTION_OFFSETS[direction];
+
+  const a = (offset2 + 1) % lid.length;
+  const b = (offset2 + 3) % lid.length;
+
   let wallVerts = [
-    parts[(visibleCornerIndex + 0) % 4],
-    parts[(visibleCornerIndex + 1) % 4],
-    parts[(visibleCornerIndex + 1) % 4].slice(0, 2).concat([-1]),
-    parts[(visibleCornerIndex + 0) % 4].slice(0, 2).concat([-1]),
+    lid[a],
+    lid[b],
+    lid[b].slice(0, 2).concat([-1]),
+    lid[a].slice(0, 2).concat([-1]),
   ];
 
   result.push(
-    getFace(offset, faces2[visibleCornerIndex], wallVerts)
+    getFace(offset, face, wallVerts)
   );
-  */
 
   return result;
 }
@@ -286,61 +275,67 @@ function buildTriangleBlock(offset, faces, lid, direction) {
 function buildSquareBlock(offset, faces, lid) {
   const result = [];
 
-  if (faces.bottom.flat) {
-    faces.bottom.texture = 0;
-  }
+  let bottomPos = [
+    [0, 1, -1],
+    [1, 1, -1],
+    lid.br,
+    lid.bl,
+  ];
 
-  if (faces.top.flat && !faces.bottom.flat) {
+  let topPos = [
+    lid.tr,
+    lid.tl,
+    [0, 0, -1],
+    [1, 0, -1],
+  ];
+
+  let leftPos = [
+    lid.bl,
+    lid.tl,
+    [0, 0, -1],
+    [0, 1, -1],
+  ];
+
+  let rightPos = [
+    lid.tr,
+    lid.br,
+    [1, 1, -1],
+    [1, 0, -1],
+  ];
+
+  if (faces.top.flat && !faces.bottom.flat && faces.bottom.texture !== 0) {
+    bottomPos = topPos;
     faces.top.texture = 0;
+    faces.bottom.flat = true;
+    faces.bottom.flip = !faces.bottom.flip;
   }
 
-  // Top
-  result.push(
-    getFace(offset, faces.bottom, [
-      [0, 1, -1],
-      [1, 1, -1],
-      lid.br,
-      lid.bl,
-    ]),
-  );
-
-  // Bottom
-  result.push(
-    getFace(offset, faces.top, [
-      lid.tr,
-      lid.tl,
-      [0, 0, -1],
-      [1, 0, -1],
-    ])
-  );
-
-  if (faces.left.flat && !faces.right.flat) {
-    faces.left.texture = 0;
+  if (faces.bottom.flat && !faces.top.flat && faces.top.texture !== 0) {
+    topPos = bottomPos;
+    faces.bottom.texture = 0;
+    faces.top.flat = true;
+    faces.top.flip = !faces.top.flip;
   }
 
-  // Left
-  result.push(
-    getFace(offset, faces.left, [
-      [0, 0, -1],
-      [0, 1, -1],
-      lid.bl,
-      lid.tl,
-    ]),
-  );
+  result.push(getFace(offset, faces.bottom, bottomPos));
+  result.push(getFace(offset, faces.top, topPos));
 
-  if (faces.right.flat && !faces.left.flat) {
+  if (faces.right.flat && !faces.left.flat && faces.left.texture !== 0) {
+    leftPos = rightPos;
     faces.right.texture = 0;
+    faces.left.flat = true;
+    faces.left.flip = !faces.left.flip;
   }
 
-  // Right
-  result.push(
-    getFace(offset, faces.right, [
-      [1, 1, -1],
-      [1, 0, -1],
-      lid.tr,
-      lid.br
-    ])
-  );
+  if (faces.left.flat && !faces.right.flat && faces.right.texture !== 0) {
+    rightPos = leftPos;
+    faces.left.texture = 0;
+    faces.right.flat = true;
+    faces.right.flip = !faces.right.flip;
+  }
+
+  result.push(getFace(offset, faces.left, leftPos));
+  result.push(getFace(offset, faces.right, rightPos));
 
   result.push(
     getFace(offset, faces.lid, [lid.tl, lid.tr, lid.br, lid.bl]),
@@ -372,7 +367,7 @@ function getBlock(block, offset) {
   const diagonal = slopeType >= 45 && slopeType <= 48;
 
   const quads = diagonal
-    ? buildTriangleBlock(offset, faces, lid2, slopeType - 45)
+    ? buildTriangleBlock(offset, faces, lid, (slopeType - 45) % 4)
     : buildSquareBlock(offset, faces, lid2);
 
   return flatten(quads.filter(quad => !!quad).map(quad => quad.getVertexes()));
@@ -388,7 +383,7 @@ function constructLid(slope, numLevels, diagonal = false) {
     ];
   }
 
-  if (numLevels === 0 && diagonal) {
+  if (numLevels === 0 && diagonal !== false) {
     return [
       [0, 0, 0],
       [1, 0, 0],
