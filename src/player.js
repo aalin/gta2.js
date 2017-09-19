@@ -3,7 +3,7 @@ import Model from './model';
 
 const RUN_SPEED = 10.0;
 const WALK_SPEED = 4.0;
-const TURN_SPEED = 0.5;
+const TURN_SPEED = 1.2;
 const BACKWARD_SPEED = -1.0;
 
 export default
@@ -13,15 +13,16 @@ class Player {
     this.position = vec3.fromValues(x, y, 2.0);
     this.direction = 0.0;;
 
-    const s = 1.0;
+    const w = 0.5;
+    const d = w / 2.0;
     this.model = new Model(gl, gl.TRIANGLES);
     this.model.addBuffer('aVertexPosition', [
-      -s, -s, 0,
-      s, -s, 0,
-      s, s, 0,
-      -s, -s, 0,
-      s, s, 0,
-      -s, s, 0
+     -d,-w, 0,
+      d,-w, 0,
+      d, w, 0,
+     -d,-w, 0,
+      d, w, 0,
+     -d, w, 0
     ], 3);
   }
 

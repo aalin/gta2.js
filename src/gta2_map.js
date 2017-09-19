@@ -56,7 +56,7 @@ function buildLid(slopeType) {
     case slopeType >= 41 && slopeType <= 44:
       return constructLid(slopeType - 41, 1);
     case slopeType >= 45 && slopeType <= 48:
-      return constructLid(slopeType - 45, 0, true);
+      return constructLid(slopeType - 45, 0);
     default:
       return constructLid(0, 0);
   }
@@ -90,24 +90,6 @@ function makeDiagonalSlope(direction, lid, height) {
 }
 
 function makeRegularSlope(direction, lid, height) {
-  switch (direction) {
-    case 0: // up
-      vec3.add(lid.tl, lid.tl, [0, 0, height]);
-      vec3.add(lid.tr, lid.tr, [0, 0, height]);
-      break;
-    case 1: // down
-      vec3.add(lid.br, lid.br, [0, 0, height]);
-      vec3.add(lid.bl, lid.bl, [0, 0, height]);
-      break;
-    case 2: // right
-      vec3.add(lid.tl, lid.tl, [0, 0, height]);
-      vec3.add(lid.bl, lid.bl, [0, 0, height]);
-      break;
-    case 3: // left
-      vec3.add(lid.tr, lid.tr, [0, 0, height]);
-      vec3.add(lid.br, lid.br, [0, 0, height]);
-      break;
-  }
 }
 
 function Vertex(position, texcoord = [0, 0]) {
@@ -215,6 +197,9 @@ function getFace(offset, face, verts) {
 
     vec2.transformMat2d(vertex.texcoord, vertex.texcoord, rotationMat);
 
+    // Pad the texture a little bit so that we don't accidentally sample any neighboring textures
+    vec2.scale(vertex.texcoord, vertex.texcoord, 0.98);
+
     vec2.add(vertex.texcoord, vertex.texcoord, [TWW / 2, TWW / 2]);
 
     vec2.add(vertex.texcoord, vertex.texcoord, textureOffset);
@@ -251,29 +236,29 @@ function buildTriangleBlock(offset, faces, lid, direction) {
     case 0: // Up left
       lidVerts.push(
         lid.tl,
-        lid.tr,
+        lid.br,
         lid.bl,
       );
       break;
     case 1: // Up right
       lidVerts.push(
         lid.tl,
-        lid.tr,
         lid.bl,
+        lid.br,
       );
       break;
     case 2: // Down left
       lidVerts.push(
         lid.tl,
-        lid.tr,
         lid.bl,
+        lid.br,
       );
       break;
     case 3: // Down right
       lidVerts.push(
         lid.tl,
-        lid.tr,
         lid.bl,
+        lid.br,
       );
       break;
   }
@@ -369,40 +354,47 @@ function getBlock(block, offset) {
   const slopeType = (block.slopeType >> 2) >>> 0;
   const lid = buildLid(slopeType);
 
+  const lid2 = {
+    tl: lid[0],
+    tr: lid[1],
+    br: lid[2],
+    bl: lid[3],
+  };
+
   const faces = {
+    top: new Face(block.top),
     bottom: new Face(block.bottom),
     right: new Face(block.right),
-    top: new Face(block.top),
     left: new Face(block.left),
     lid: new Face(block.lid)
   };
 
-  const quads = (lid.diagonal !== false)
-    ? buildTriangleBlock(offset, faces, lid, lid.diagonal)
-    : buildSquareBlock(offset, faces, lid);
+  const diagonal = slopeType >= 45 && slopeType <= 48;
+
+  const quads = diagonal
+    ? buildTriangleBlock(offset, faces, lid2, slopeType - 45)
+    : buildSquareBlock(offset, faces, lid2);
 
   return flatten(quads.filter(quad => !!quad).map(quad => quad.getVertexes()));
 }
 
 function constructLid(slope, numLevels, diagonal = false) {
   if (slope === 0 && numLevels === 0) {
-    return {
-      tl: [0, 0, 0],
-      tr: [1, 0, 0],
-      bl: [0, 1, 0],
-      br: [1, 1, 0],
-      diagonal: false
-    };
+    return [
+      [0, 0, 0],
+      [1, 0, 0],
+      [1, 1, 0],
+      [0, 1, 0],
+    ];
   }
 
   if (numLevels === 0 && diagonal) {
-    return {
-      tl: [0, 0, 0],
-      tr: [1, 0, 0],
-      bl: [0, 1, 0],
-      br: [1, 1, 0],
-      diagonal: slope
-    };
+    return [
+      [0, 0, 0],
+      [1, 0, 0],
+      [1, 1, 0],
+      [0, 1, 0],
+    ];
   }
 
   const height = numLevels > 0 ? 1.0 / numLevels : 1;
@@ -411,19 +403,50 @@ function constructLid(slope, numLevels, diagonal = false) {
 
   const direction = Math.floor(slope / numLevels);
 
-  let lid = {
-    tl: [0, 0, low],
-    tr: [1, 0, low],
-    bl: [0, 1, low],
-    br: [1, 1, low],
-    diagonal: false
-  };
+  let lid = [
+    [0, 0, low],
+    [1, 0, low],
+    [1, 1, low],
+    [0, 1, low],
+  ];
 
-  if (diagonal) {
-    lid.diagonal = direction;
+  switch (direction) {
+    case 0: // up
+      lid[0][2] += height;
+      lid[1][2] += height;
+      break;
+    case 1: // down
+      lid[2][2] += height;
+      lid[3][2] += height;
+      break;
+    case 2: // right
+      lid[3][2] += height;
+      lid[0][2] += height;
+      break;
+    case 3: // left
+      lid[1][2] += height;
+      lid[2][2] += height;
+      break;
   }
 
-  makeRegularSlope(direction, lid, height);
+    /*
+  if (diagonal) {
+    switch (direction) {
+      case 0:
+        array.splice(0, i);
+        break;
+      case 1:
+        array.splice(1, i);
+        break;
+      case 2:
+        array.splice(2, i);
+        break;
+      case 3:
+        array.splice(3, i);
+        break;
+    }
+  }
+    */
 
   return lid;
 }
@@ -446,22 +469,17 @@ function* parseMap(data) {
 
         yield { columnWords };
 
-        console.log('column words', columnWords);
         yield { columns: buffer.read8arrayLE(columnWords * 4) };
-        console.log("POSITION", buffer.pos);
 
         const numBlocks = buffer.read32LE();
 
         yield { numBlocks };
 
-        console.log("num columns:", columnWords);
-        console.log("num blocks:", numBlocks);
-
         yield { blocks: buffer.readStructs(numBlocks, BlockInfo) };
 
         break;
       default:
-        console.log(`Got type ${type}, skipping ${size}`);
+        //console.log(`Got type ${type}, skipping ${size}`);
         buffer.skip(size);
         break;
     }
@@ -606,16 +624,19 @@ class GTA2Map {
       }
     }
 
-    const [px, py] = playerPosition;
     const square = Math.sqrt(this.models.length);
     const mul = 256 / square;
+    const [px, py] = [
+      Math.round(playerPosition[0] / mul),
+      Math.round(playerPosition[1] / mul),
+    ];
 
     this.models.forEach((model, i) => {
-      const x = Math.floor((i % square) * mul) + mul / 2;
-      const y = Math.floor(i / square) * mul + mul / 2;
+      const x = Math.round(Math.floor((i % square) * mul) + mul / 2) / mul;
+      const y = Math.round(Math.floor(i / square) * mul + mul / 2) / mul;
       const distance = Math.sqrt((px - x) ** 2 + (py - y) ** 2);
 
-      if (distance < 50) {
+      if (distance <= 2.0) {
         model.draw(shader);
       }
     });
