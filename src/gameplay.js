@@ -5,7 +5,7 @@ import BlobStore from './blob_store';
 import GTA2Style from './gta2_style';
 import GTA2Map from './gta2_map';
 import Camera from './camera';
-import { mat4 } from 'gl-matrix';
+import { mat4, vec3 } from 'gl-matrix';
 import { KEYS } from './input';
 import Player from './player';
 
@@ -15,7 +15,8 @@ import fragmentShader from './shaders/default.frag';
 import playerVertexShader from './shaders/player.vert';
 import playerFragmentShader from './shaders/player.frag';
 
-const LEVEL_BASE_URI = process.env.NODE_ENV === 'production' ? 'http://gtamp.com/mapscript/_singleplayer/04_gta2files/extras/singleplayer/data' : '/levels';
+// const LEVEL_BASE_URI = process.env.NODE_ENV === 'production' ? 'http://gtamp.com/mapscript/_singleplayer/04_gta2files/extras/singleplayer/data' : '/levels';
+const LEVEL_BASE_URI = document.location.pathname + 'levels'
 
 export default
 class Gameplay extends GameState {
@@ -57,6 +58,7 @@ class Gameplay extends GameState {
     this.camera = new Camera();
     this.player = new Player(this.gl, 128, 128);
     this.zoom = 0.0;
+    this.cameraState = 0.0;
   }
 
   mount() {
@@ -120,6 +122,12 @@ class Gameplay extends GameState {
     if (this.input.isDown(KEYS.RIGHT)) {
     }
 
+    if (this.input.isDown(KEYS.SPACE)) {
+      this.cameraState += delta;
+    } else {
+      this.cameraState = 0.0;
+    }
+
     if (this.input.isDown(90)) {
       this.zoom += delta * 10.0;
     }
@@ -136,28 +144,46 @@ class Gameplay extends GameState {
       return;
     }
 
-    const cameraState = {
-      zoom: 10.0
-    };
-
     const t = ticks / 5000.0;
 
-    const eye = [
-      this.player.position[0],
-      this.player.position[1],
-      20 + this.zoom
-    ];
+    const eye = vec3.create();
+    const lookat = vec3.create();
+    const up = vec3.create();
 
-    const lookat = [
-      this.player.position[0],
-      this.player.position[1],
-      0
-    ];
+    if (this.cameraState > 0.01) {
+      const forward = [
+        Math.cos(this.player.direction * Math.PI),
+        Math.sin(this.player.direction * Math.PI),
+        0
+      ];
+
+      vec3.add(eye, this.player.position, [
+        forward[0] * -10,
+        forward[1] * -10,
+        8
+      ]);
+
+      console.log(eye);
+
+      vec3.add(lookat, lookat, this.player.position);
+
+      vec3.set(up, 0, 0, 1);
+    } else {
+      vec3.add(eye, eye, [
+        this.player.position[0],
+        this.player.position[1],
+        20 + this.zoom
+      ]);
+
+      vec3.add(lookat, lookat, this.player.position);
+
+      vec3.set(up, 0, 1, 0);
+    }
 
     const [pMatrix, vMatrix] = this.camera.lookat(this.gl,
       eye,
       lookat,
-      [0, 1, 0]
+      up
     );
 
     const matrices = {

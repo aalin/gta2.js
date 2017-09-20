@@ -7,7 +7,8 @@ export const KEYS = {
   UP: 38,
   RIGHT: 39,
   DOWN: 40,
-  SHIFT: 16
+  SHIFT: 16,
+  SPACE: 32
 };
 
 export default

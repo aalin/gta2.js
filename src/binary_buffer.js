@@ -81,10 +81,12 @@ function buildTypedArray(numBytes, length) {
 
 const _data = Symbol();
 const _pos = Symbol();
+const _dv = Symbol();
 
 export default class BinaryByffer {
   constructor(data) {
     this[_data] = data;
+    this[_dv] = new DataView(data.buffer || data);
     this[_pos] = 0;
   }
 
@@ -123,6 +125,10 @@ export default class BinaryByffer {
   }
   read32LE() {
     return this._readIntLE(4);
+  }
+
+  read32fLE() {
+    return this._readFloatLE(4);
   }
 
   read8BE() {
@@ -218,7 +224,9 @@ export default class BinaryByffer {
   }
 
   skip(numBytes) {
+    const oldPos = this.pos;
     this.pos += numBytes;
+    return oldPos;
   }
 
   eof() {

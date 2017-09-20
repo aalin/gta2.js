@@ -55,12 +55,6 @@ function deg2rad(deg) {
   return deg * Math.PI / 180.0;
 }
 
-const KEY_W = 87;
-const KEY_A = 65;
-const KEY_S = 83;
-const KEY_D = 68;
-const KEY_SPACE = 32;
-
 function setupControls() {
   const canvas = createFullscreenCanvas(0);
   const gl = initGL(canvas);
@@ -206,21 +200,11 @@ class Game {
 
     const { input } = this.controls;
 
+    /*
     if (input.isDown(KEY_SPACE)) {
       this.stop();
     }
-
-    let forward = this.state.forward || 0.0;
-    let stride = this.state.stride || 0.0;
-
-    if (input.isDown(KEY_W)) { forward += 1.0; }
-    if (input.isDown(KEY_S)) { forward -= 1.0; }
-    if (input.isDown(KEY_A)) { stride -= 1.0; }
-    if (input.isDown(KEY_D)) { stride == 1.0; }
-
-    this.setState({ forward, stride });
-
-    this._updateState();
+    */
   }
 
   draw() {
@@ -257,13 +241,6 @@ class Game {
 
     this.funcs2d.forEach(fn => fn(ctx, canvas));
     this.funcs2d = [];
-  }
-
-  _updateState() {
-    Object.assign(this.state, this.nextState);
-    this.nextStateCallbacks.forEach((x) => x.call(null, this.state));
-    this.nextStateCallbacks = [];
-    this.nextState = {};
   }
 }
 

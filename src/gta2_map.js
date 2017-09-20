@@ -26,6 +26,18 @@ const BlockInfo = new StructReader({
   slopeType: "8LE"
 });
 
+const Light = new StructReader({
+  argb: '32LE',
+  x: '16LE',
+  y: '16LE',
+  z: '16LE',
+  radius: '16LE',
+  intensity: '8LE',
+  shape: '8LE',
+  on_time: '8LE',
+  off_time: '8LE',
+});
+
 function* createXYiterator(count, xadd = 0, yadd = 0) {
   for (let y = 0; y < count; y++) {
     for (let x = 0; x < count; x++) {
@@ -60,36 +72,6 @@ function buildLid(slopeType) {
     default:
       return constructLid(0, 0);
   }
-}
-
-function makeDiagonalSlope(direction, lid, height) {
-  const half = height / 2.0;
-
-  switch (direction) {
-    case 0: // up left
-      vec3.add(lid.tl, lid.tl, [0, 0, height]);
-      vec3.add(lid.tr, lid.tr, [0, 0, half]);
-      vec3.add(lid.bl, lid.br, [0, 0, half]);
-      break;
-    case 1: // up right
-      vec3.add(lid.tr, lid.tr, [0, 0, height]);
-      vec3.add(lid.tl, lid.tl, [0, 0, half]);
-      vec3.add(lid.br, lid.br, [0, 0, half]);
-      break;
-    case 2: // down left
-      vec3.add(lid.bl, lid.bl, [0, 0, height]);
-      vec3.add(lid.br, lid.br, [0, 0, half]);
-      vec3.add(lid.tl, lid.tl, [0, 0, half]);
-      break;
-    case 3: // down right
-      vec3.add(lid.br, lid.br, [0, 0, height]);
-      vec3.add(lid.bl, lid.bl, [0, 0, half]);
-      vec3.add(lid.tr, lid.tr, [0, 0, half]);
-      break;
-  }
-}
-
-function makeRegularSlope(direction, lid, height) {
 }
 
 function Vertex(position, texcoord = [0, 0]) {
@@ -188,14 +170,17 @@ function getFace(offset, face, verts, texcoords = TEXCOORDS) {
   mat2d.rotate(rotationMat, rotationMat, -face.rotation * Math.PI / 180.0);
 
   const flipMat = mat2d.create();
-  mat2d.scale(flipMat, flipMat, [-1.0, 1.0]);
+
+  if (face.flip) {
+    mat2d.scale(flipMat, flipMat, [-1.0, -1.0]);
+  } else {
+    mat2d.scale(flipMat, flipMat, [1.0, -1.0]);
+  }
 
   vertexes.forEach((vertex, i) => {
     vec2.add(vertex.texcoord, vertex.texcoord, [-TWW / 2, -TWW / 2]);
 
-    if (face.flip) {
-      vec2.transformMat2d(vertex.texcoord, vertex.texcoord, flipMat);
-    }
+    vec2.transformMat2d(vertex.texcoord, vertex.texcoord, flipMat);
 
     vec2.transformMat2d(vertex.texcoord, vertex.texcoord, rotationMat);
 
@@ -231,10 +216,10 @@ function setLidVerts(lid, indexes, texcoordIndexes = indexes) {
 const TRIANGLE_DIRECTION_OFFSETS = [0, 1, 3, 2];
 
 const TRIANGLE_DIRECTION_INDEXES = [
+  [0, 1, 2],
+  [0, 1, 3],
   [1, 2, 3],
   [0, 2, 3],
-  [0, 1, 2],
-  [0, 1, 3]
 ];
 
 function buildTriangleBlock(offset, faces, lid, direction) {
@@ -257,14 +242,14 @@ function buildTriangleBlock(offset, faces, lid, direction) {
   const face = faces2[visibleCornerIndex];
   const offset2 = TRIANGLE_DIRECTION_OFFSETS[direction];
 
-  const a = (offset2 + 1) % lid.length;
-  const b = (offset2 + 3) % lid.length;
+  const a = (offset2 + 0) % lid.length;
+  const b = (offset2 + 2) % lid.length;
 
   let wallVerts = [
-    lid[a],
-    lid[b],
-    lid[b].slice(0, 2).concat([-1]),
     lid[a].slice(0, 2).concat([-1]),
+    lid[b].slice(0, 2).concat([-1]),
+    lid[b],
+    lid[a],
   ];
 
   result.push(
@@ -277,32 +262,32 @@ function buildTriangleBlock(offset, faces, lid, direction) {
 function buildSquareBlock(offset, faces, lid) {
   const result = [];
 
-  let bottomPos = [
-    [0, 1, -1],
+  let topPos = [
     [1, 1, -1],
-    lid.br,
-    lid.bl,
+    [0, 1, -1],
+    lid[3],
+    lid[2],
   ];
 
-  let topPos = [
-    lid.tr,
-    lid.tl,
+  let bottomPos = [
     [0, 0, -1],
     [1, 0, -1],
+    lid[1],
+    lid[0],
   ];
 
   let leftPos = [
-    lid.bl,
-    lid.tl,
-    [0, 0, -1],
     [0, 1, -1],
+    [0, 0, -1],
+    lid[0],
+    lid[3],
   ];
 
   let rightPos = [
-    lid.tr,
-    lid.br,
-    [1, 1, -1],
     [1, 0, -1],
+    [1, 1, -1],
+    lid[2],
+    lid[1],
   ];
 
   if (faces.top.flat && !faces.bottom.flat && faces.bottom.texture !== 0) {
@@ -340,7 +325,7 @@ function buildSquareBlock(offset, faces, lid) {
   result.push(getFace(offset, faces.right, rightPos));
 
   result.push(
-    getFace(offset, faces.lid, [lid.tl, lid.tr, lid.br, lid.bl]),
+    getFace(offset, faces.lid, lid)
   );
 
   return result;
@@ -350,13 +335,6 @@ function getBlock(block, offset) {
   const groundType = (block.slopeType && 0b11) >>> 0;
   const slopeType = (block.slopeType >> 2) >>> 0;
   const lid = buildLid(slopeType);
-
-  const lid2 = {
-    tl: lid[0],
-    tr: lid[1],
-    br: lid[2],
-    bl: lid[3],
-  };
 
   const faces = {
     top: new Face(block.top),
@@ -370,7 +348,7 @@ function getBlock(block, offset) {
 
   const quads = diagonal
     ? buildTriangleBlock(offset, faces, lid, (slopeType - 45) % 4)
-    : buildSquareBlock(offset, faces, lid2);
+    : buildSquareBlock(offset, faces, lid);
 
   return flatten(quads.filter(quad => !!quad).map(quad => quad.getVertexes()));
 }
@@ -409,12 +387,12 @@ function constructLid(slope, numLevels, diagonal = false) {
 
   switch (direction) {
     case 0: // up
-      lid[0][2] += height;
-      lid[1][2] += height;
-      break;
-    case 1: // down
       lid[2][2] += height;
       lid[3][2] += height;
+      break;
+    case 1: // down
+      lid[0][2] += height;
+      lid[1][2] += height;
       break;
     case 2: // right
       lid[3][2] += height;
@@ -475,6 +453,10 @@ function* parseMap(data) {
         yield { blocks: buffer.readStructs(numBlocks, BlockInfo) };
 
         break;
+      case 'LGHT':
+        const lightSize = 16;
+        const lights = buffer.readStructs(size / lightSize, Light);
+        console.log(lights);
       default:
         //console.log(`Got type ${type}, skipping ${size}`);
         buffer.skip(size);
@@ -576,7 +558,7 @@ function* loadParts(attributes) {
 
     for (let x = 0; x < MAP_SIZE; x++) {
 
-      const columnIndex = attributes.base[y * MAP_SIZE + x] * 4;
+      const columnIndex = attributes.base[(255 - y) * MAP_SIZE + x] * 4;
 
       colData.setPos(columnIndex);
 
