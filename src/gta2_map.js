@@ -26,6 +26,10 @@ const BlockInfo = new StructReader({
   slopeType: "8LE"
 });
 
+function fixedPoint(x) {
+  return (((x & 0xff80) >> 7) >>> 0) % 256 + (x & 0x7f) / 128.0;
+}
+
 const Light = new StructReader({
   argb: '32LE',
   x: '16LE',
@@ -167,6 +171,7 @@ function getFace(offset, face, verts, texcoords = TEXCOORDS) {
   });
 
   const rotationMat = mat2d.create();
+
   mat2d.rotate(rotationMat, rotationMat, -face.rotation * Math.PI / 180.0);
 
   const flipMat = mat2d.create();
@@ -179,24 +184,10 @@ function getFace(offset, face, verts, texcoords = TEXCOORDS) {
 
   vertexes.forEach((vertex, i) => {
     vec2.add(vertex.texcoord, vertex.texcoord, [-TWW / 2, -TWW / 2]);
-
     vec2.transformMat2d(vertex.texcoord, vertex.texcoord, flipMat);
-
     vec2.transformMat2d(vertex.texcoord, vertex.texcoord, rotationMat);
-
-    // Pad the texture a little bit so that we don't accidentally sample any neighboring textures
-    // vec2.scale(vertex.texcoord, vertex.texcoord, 0.995);
-
     vec2.add(vertex.texcoord, vertex.texcoord, [TWW / 2, TWW / 2]);
-
     vec2.add(vertex.texcoord, vertex.texcoord, textureOffset);
-
-    /*
-    if (isDown) {
-      vec2.add(vertex.texcoord, [0, 0], TEXCOORDS[i]);
-    }
-    */
-
     vec3.add(vertex.position, vertex.position, offset);
   });
 
@@ -250,7 +241,11 @@ function buildTriangleBlock(offset, faces, lid, direction) {
     lid[b].slice(0, 2).concat([-1]),
     lid[b],
     lid[a],
-  ];
+  ]
+
+  if ((offset2 % 2) === 0) {
+    wallVerts = wallVerts.reverse();
+  }
 
   result.push(
     getFace(offset, face, wallVerts)
@@ -455,7 +450,13 @@ function* parseMap(data) {
         break;
       case 'LGHT':
         const lightSize = 16;
-        const lights = buffer.readStructs(size / lightSize, Light);
+        const lights = buffer.readStructs(size / lightSize, Light).map((light) => {
+          light.x = fixedPoint(light.x);
+          light.y = fixedPoint(light.y);
+          light.z = fixedPoint(light.z);
+          light.radius = fixedPoint(light.radius);
+          return light;
+        });
         console.log(lights);
       default:
         //console.log(`Got type ${type}, skipping ${size}`);
@@ -511,17 +512,18 @@ function* loadVertexes(parts) {
 
   const positions = new ArrayWriter(new Float32Array(MAP_SIZE * MAP_SIZE * 3 * 20));
   const texcoords = new ArrayWriter(new Float32Array(MAP_SIZE * MAP_SIZE * 2 * 20));
+  const shadelevels = new ArrayWriter(new Float32Array(MAP_SIZE * MAP_SIZE * 3));
 
   for (let divider of subdivide(MAP_SIZE, 32)) {
     positions.reset();
     texcoords.reset();
+    shadelevels.reset();
 
     for (let col of divider) {
       const [x, y] = col;
       const column = parts[y][x];
 
       for (let z = 0; z < column.length; z++) {
-        // for (let z = column.length - 1; z >= 0; z--) {
         if (positions.eof) {
           alert('eof');
           break;
@@ -538,13 +540,18 @@ function* loadVertexes(parts) {
         v.forEach((vs) => {
           positions.write(vs.position);
           texcoords.write(vs.texcoord);
+          // shadelevels.write(vs.shadelevel);
         });
       }
-
-      // yield { progress: count++ * MAP_SIZE, max: MAP_SIZE * MAP_SIZE * 8 };
     }
 
-    yield { progress: count++, max: 64, positions: positions.array, texcoords: texcoords.array };
+    yield {
+      progress: count++,
+      max: 64,
+      positions: positions.array,
+      texcoords: texcoords.array,
+      shadelevels: shadelevels.array
+    };
   }
 }
 
@@ -656,12 +663,12 @@ GTA2Map.load = function load(gl, filename) {
 
     for (let part of loadVertexes(parts)) {
       if (part.positions && part.positions.length) {
-        const model = new Model(gl, gl.TRIANGLES);
-
-        console.log('creating model, length:', part.positions.length);
-        model.addBuffer('aVertexPosition', part.positions, 3);
-        model.addBuffer('aTexCoord', part.texcoords, 2);
-        models.push(model);
+        models.push(
+          new Model(gl, gl.TRIANGLES)
+            .addBuffer('aVertexPosition', part.positions, 3)
+            .addBuffer('aTexCoord', part.texcoords, 2)
+          //.addBuffer('aShadeLevel', part.shadelevels, 1)
+        );
       }
 
       if (part.progress) {

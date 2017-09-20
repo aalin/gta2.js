@@ -5,7 +5,7 @@ import Input from './input';
 import Gameplay from './gameplay';
 import { wrapGameState } from './game_state';
 
-const MAX_DELTA = 1 / 30.0;
+const MAX_DELTA = 1.0 / 60.0;
 
 function initGL(canvas) {
   try {
@@ -64,7 +64,9 @@ function setupControls() {
   gl.enable(gl.DEPTH_TEST);
   //gl.enable(gl.BLEND);
   //gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-  gl.cullFace(gl.FRONT_AND_BACK);
+
+  // gl.enable(gl.CULL_FACE);
+  // gl.cullFace(gl.BACK);
 
   return { gl, input };
 }
