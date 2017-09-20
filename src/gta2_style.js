@@ -96,7 +96,16 @@ function* loadSprites(gl, style, textureIndex) {
   const textureSize = 2048;
   const pageSize = 256;
 
+  const textureData = new Uint8Array(2048 * 2048 * 4);
   const { canvas, ctx } = createTextureCanvas(textureSize);
+
+  function putPixel(px, py, color) {
+    const offset = py * 2048 * 4 + px * 4;
+    textureData[offset + 0] = color[0];
+    textureData[offset + 1] = color[1];
+    textureData[offset + 2] = color[1];
+    textureData[offset + 3] = color[1];
+  }
 
   for (let pageNum = 0; pageNum < 32; pageNum++) {
     const i = Math.floor(pageNum % 8) * 256;
@@ -117,12 +126,12 @@ function* loadSprites(gl, style, textureIndex) {
         const c = style.spriteGraphics[pageOffset + idx];
 
         if (!c) {
-          putPixel(ctx, px, py, [0, 0, 0, 0]);
+          putPixel(px, py, [0, 0, 0, 0]);
         } else {
           const idx = getPaletteIndex(paletteIndex, c) + style.paletteBase.tile * 256;
 
           const rgba = style.physicalPalettes[idx];
-          putPixel(ctx, px, py, extractColor(rgba | 0xff000000));
+          putPixel(px, py, extractColor(rgba | 0xff000000));
         }
       }
     }
@@ -130,13 +139,19 @@ function* loadSprites(gl, style, textureIndex) {
     yield { _type: `${pageNum}/32`, _progress: pageNum, _max: 32 };
   }
 
+  console.log('textureData', textureData);
+
+    /*
   canvas.id = `canvas-2`;
   canvas.style.position = 'fixed';
   canvas.style.top = canvas.style.right = canvas.style.bottom = canvas.style.left = 0;
   canvas.style.height = canvas.style.width = `${textureSize}px`;
   canvas.style.zIndex = 2;
+  */
 
-  const texture = new Texture(gl, textureIndex, canvas);
+  const texture = new Texture(gl, textureIndex);
+  texture.setData(2048, textureData);
+  console.log('texturedata', textureData);
   console.log('gl.MAX_TEXTURE_SIZE', gl.getParameter(gl.MAX_TEXTURE_SIZE));
   // document.body.appendChild(canvas);
 
@@ -150,7 +165,15 @@ function* loadTextures(gl, style, textureIndex) {
   const squared = Math.ceil(Math.sqrt(992));
   const tileSize = 64;
 
-  const { canvas, ctx } = createTextureCanvas(textureSize);
+  const textureData = new Uint8Array(textureSize * textureSize * 4);
+
+  function putPixel(px, py, color) {
+    const offset = py * 2048 * 4 + px * 4;
+    textureData[offset + 0] = color[0];
+    textureData[offset + 1] = color[1];
+    textureData[offset + 2] = color[2];
+    textureData[offset + 3] = color[3];
+  }
 
   for (let tileIndex = 0; tileIndex < 992; tileIndex++) {
     const i = Math.floor(tileIndex % 32) * 64;
@@ -172,10 +195,10 @@ function* loadTextures(gl, style, textureIndex) {
         const c = style.tiles[pageOffset + idx];
 
         if (!c) {
-          putPixel(ctx, px, py, [0, 0, 0, 0]);
+          putPixel(px, py, [0, 0, 0, 0]);
         } else {
           const rgba = getPaletteValue(style.physicalPalettes, paletteIndex, c);
-          putPixel(ctx, px, py, extractColor(rgba | 0xff000000));
+          putPixel(px, py, extractColor(rgba | 0xff000000));
         }
       }
     }
@@ -183,13 +206,17 @@ function* loadTextures(gl, style, textureIndex) {
     yield { _type: `${tileIndex}/992`, _progress: tileIndex, _max: 992 };
   }
 
+    /*
   canvas.id = `canvas-2`;
   canvas.style.position = 'fixed';
   canvas.style.top = canvas.style.right = canvas.style.bottom = canvas.style.left = 0;
   canvas.style.height = canvas.style.width = `${textureSize}px`;
   canvas.style.zIndex = 2;
+  */
 
-  const texture = new Texture(gl, textureIndex, canvas);
+  const texture = new Texture(gl, textureIndex);
+  texture.setData(textureSize, textureData);
+
   console.log('gl.MAX_TEXTURE_SIZE', gl.getParameter(gl.MAX_TEXTURE_SIZE));
   // document.body.appendChild(canvas);
 
