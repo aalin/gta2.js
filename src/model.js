@@ -71,7 +71,12 @@ export default class Model {
     });
   }
 
-  draw(shader) {
+  drawArrays(shader, first, count) {
+    this.bindBuffers(shader);
+    this.gl.drawArrays(this.drawMode || this.gl.TRIANGLES, first, count);
+  }
+
+  draw(shader, first = 0, count = this.buffers[0].buffer.numItems) {
     if (!this.buffers.length) {
       console.error('Drawing a model without a buffer??');
       return;
@@ -82,11 +87,7 @@ export default class Model {
     if (this.indices) {
       this.indices.draw(this.drawMode || this.gl.TRIANGLES);
     } else {
-      this.gl.drawArrays(
-        this.drawMode || this.gl.TRIANGLES,
-        0,
-        this.buffers[0].buffer.numItems
-      );
+      this.gl.drawArrays(this.drawMode || this.gl.TRIANGLES, first, count);
     }
   }
 }

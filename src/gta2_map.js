@@ -286,14 +286,14 @@ function buildSquareBlock(offset, faces, lid) {
   ];
 
   if (faces.top.flat && !faces.bottom.flat && faces.bottom.texture !== 0) {
-    bottomPos = topPos;
+    vec3.scale(bottomPos, topPos, 0.99);
     faces.top.texture = 0;
     faces.bottom.flat = true;
     faces.bottom.flip = !faces.bottom.flip;
   }
 
   if (faces.bottom.flat && !faces.top.flat && faces.top.texture !== 0) {
-    topPos = bottomPos;
+    vec3.scale(topPos, bottomPos, 0.99);
     faces.bottom.texture = 0;
     faces.top.flat = true;
     faces.top.flip = !faces.top.flip;
@@ -303,14 +303,14 @@ function buildSquareBlock(offset, faces, lid) {
   result.push(getFace(offset, faces.top, topPos));
 
   if (faces.right.flat && !faces.left.flat && faces.left.texture !== 0) {
-    leftPos = rightPos;
+    vec3.scale(leftPos, rightPos, 0.99);
     faces.right.texture = 0;
     faces.left.flat = true;
     faces.left.flip = !faces.left.flip;
   }
 
   if (faces.left.flat && !faces.right.flat && faces.right.texture !== 0) {
-    rightPos = leftPos;
+    vec3.scale(rightPos, leftPos, 0.99);
     faces.left.texture = 0;
     faces.right.flat = true;
     faces.right.flip = !faces.right.flip;
@@ -510,25 +510,16 @@ function* loadVertexes(parts) {
   const size = parts.length;
   let count = 0;
 
-  const positions = new ArrayWriter(new Float32Array(MAP_SIZE * MAP_SIZE * 3 * 20));
-  const texcoords = new ArrayWriter(new Float32Array(MAP_SIZE * MAP_SIZE * 2 * 20));
-  const shadelevels = new ArrayWriter(new Float32Array(MAP_SIZE * MAP_SIZE * 3));
+  const positions = [];
+  const texcoords = [];
+  const indexes = Array.from({ length: 256 * 256 });
 
-  for (let divider of subdivide(MAP_SIZE, 32)) {
-    positions.reset();
-    texcoords.reset();
-    shadelevels.reset();
-
-    for (let col of divider) {
-      const [x, y] = col;
+  for (let y = 0; y < 256; y++) {
+    for (let x = 0; x < 256; x++) {
       const column = parts[y][x];
+      indexes[y * 256 + x] = Math.floor(positions.length / 3);
 
       for (let z = 0; z < column.length; z++) {
-        if (positions.eof) {
-          alert('eof');
-          break;
-        }
-
         const block = column[z];
 
         if (block === undefined) {
@@ -538,21 +529,16 @@ function* loadVertexes(parts) {
         const v = getBlock(block, [x, y, z]);
 
         v.forEach((vs) => {
-          positions.write(vs.position);
-          texcoords.write(vs.texcoord);
-          // shadelevels.write(vs.shadelevel);
+          positions.push(...vs.position);
+          texcoords.push(...vs.texcoord);
         });
       }
     }
 
-    yield {
-      progress: count++,
-      max: 64,
-      positions: positions.array,
-      texcoords: texcoords.array,
-      shadelevels: shadelevels.array
-    };
+    yield { progress: y, max: 256 };
   }
+
+  yield { indexes, positions, texcoords }
 }
 
 function* loadParts(attributes) {
@@ -592,8 +578,8 @@ function* loadParts(attributes) {
 
 export default
 class GTA2Map {
-  constructor(models) {
-    this.models = models;
+  constructor(model) {
+    this.model = model;
   }
 
   draw(gl, shader, matrices, playerPosition, style = null) {
@@ -610,22 +596,38 @@ class GTA2Map {
       }
     }
 
-    const square = Math.sqrt(this.models.length);
-    const mul = 256 / square;
-    const [px, py] = [
-      Math.round(playerPosition[0] / mul),
-      Math.round(playerPosition[1] / mul),
-    ];
+    this.model.draw(shader, playerPosition);
+    /*
+    const x = Math.round(Math.floor((i % square) * mul) + mul / 2) / mul;
+    const y = Math.round(Math.floor(i / square) * mul + mul / 2) / mul;
+    const distance = Math.sqrt((px - x) ** 2 + (py - y) ** 2);
+    model.draw(shader);
+    */
+  }
+}
 
-    this.models.forEach((model, i) => {
-      const x = Math.round(Math.floor((i % square) * mul) + mul / 2) / mul;
-      const y = Math.round(Math.floor(i / square) * mul + mul / 2) / mul;
-      const distance = Math.sqrt((px - x) ** 2 + (py - y) ** 2);
+class MapModel {
+  constructor(gl, part) {
+    this.indexes = part.indexes;
 
-      if (distance <= 2.0) {
-        model.draw(shader);
-      }
-    });
+    this.model = new Model(gl, gl.TRIANGLES)
+      .addBuffer('aVertexPosition', part.positions, 3)
+      .addBuffer('aTexCoord', part.texcoords, 2);
+  }
+
+  draw(shader, playerPosition) {
+    let [x, y] = playerPosition.map(Math.floor);
+
+    const minX = Math.min(255, x - 20);
+    const maxX = Math.max(0, x + 20);
+    const minY = Math.min(255, y - 20);
+    const maxY = Math.max(0, y + 20);
+
+    for (let y = minY; y < maxY; y++) {
+      const first = this.indexes[y * 256 + minX];
+      const count = this.indexes[y * 256 + maxX] - first;
+      this.model.drawArrays(shader, first, count);
+    }
   }
 }
 
@@ -659,23 +661,18 @@ GTA2Map.load = function load(gl, filename) {
       yield progress(part.progress, part.max, 'Decompressing map');
     }
 
-    const models = [];
+    let model;
 
     for (let part of loadVertexes(parts)) {
-      if (part.positions && part.positions.length) {
-        models.push(
-          new Model(gl, gl.TRIANGLES)
-            .addBuffer('aVertexPosition', part.positions, 3)
-            .addBuffer('aTexCoord', part.texcoords, 2)
-          //.addBuffer('aShadeLevel', part.shadelevels, 1)
-        );
+      if (part.positions) {
+        model = new MapModel(gl, part);
       }
 
       if (part.progress) {
-        yield progress(part.progress, part.max, `Creating map models (${models.length})`);
+        yield progress(part.progress, part.max, `Creating map model`);
       }
     }
 
-    yield done(new GTA2Map(models));
+    yield done(new GTA2Map(model));
   }
 }

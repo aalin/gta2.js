@@ -113,6 +113,8 @@ class Gameplay extends GameState {
       this.player.turn(-delta);
     }
 
+    this.player.update(delta);
+
     if (this.input.isDown(KEYS.UP)) {
     }
     if (this.input.isDown(KEYS.DOWN)) {
