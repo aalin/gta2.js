@@ -97,9 +97,11 @@ function Vertex(position, texcoord = [0, 0]) {
   this.texcoord = texcoord;
 }
 
+const TPP = 1.0 / 4096.0;
 const TWW = 1.0 / 32.0;
-const TAA = 0.0;
-const TXX = TAA + TWW;
+const TZZ = 0.0;
+const TAA = TZZ + TPP;
+const TXX = TZZ + TWW - TPP;
 
 const TEXCOORDS = [
   [TAA, TAA],
