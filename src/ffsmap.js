@@ -195,31 +195,6 @@ const TRIANGLE_DIRECTION_INDEXES = [
   [0, 2, 3],
 ];
 
-function buildSlopedOuterCorner(offset, faces, lid, direction) {
-  const offset2 = TRIANGLE_DIRECTION_OFFSETS[direction];
-
-  const a = (offset2 + 1) % lid.length;
-  const b = (offset2 + 2) % lid.length;
-  const c = (offset2 + 0) % lid.length;
-
-  const faces2 = [faces.top, faces.right, faces.bottom, faces.left];
-  const visibleCornerIndex = faces2.findIndex(face => face.texture !== 0);
-
-  const face = faces2[visibleCornerIndex] || faces.lid;
-
-  let wallVerts = [
-    lid[a],
-    lid[b].slice(0, 2).concat([-1]),
-    lid[c].slice(0, 2).concat([-1]),
-  ]
-
-  if ((offset2 % 2) === 0) {
-    wallVerts = wallVerts.reverse();
-  }
-
-  return [getFace(offset, face, wallVerts)]
-}
-
 function buildTriangleBlock(offset, faces, lid, direction) {
   const result = [];
 
@@ -346,19 +321,11 @@ function getBlock(block, offset) {
     lid: new Face(block.lid)
   };
 
-  let quads = [];
+  const diagonal = slopeType >= 45 && slopeType <= 48;
 
-  switch (true) {
-    case slopeType >= 45 && slopeType <= 48:
-      quads = buildTriangleBlock(offset, faces, lid, (slopeType - 45) % 4);
-      break;
-    case slopeType >= 49 && slopeType <= 53:
-      quads = buildSlopedOuterCorner(offset, faces, lid, (slopeType - 49) % 4);
-      break;
-    default:
-      quads = buildSquareBlock(offset, faces, lid);
-      break;
-  }
+  const quads = diagonal
+    ? buildTriangleBlock(offset, faces, lid, (slopeType - 45) % 4)
+    : buildSquareBlock(offset, faces, lid);
 
   return flatten(quads.filter(quad => !!quad).map(quad => quad.getVertexes()));
 }
@@ -375,16 +342,25 @@ function buildLid(slopeType) {
     case slopeType >= 41 && slopeType <= 44:
       return constructLid(slopeType - 41, 1);
     case slopeType >= 45 && slopeType <= 48:
-      return constructLid(0, 0);
+      return constructLid(slopeType - 45, 0);
     case slopeType >= 49 && slopeType <= 53:
-      return constructLid(0, 0);
+      return constructLid(slopeType - 49, 1);
     default:
       return constructLid(0, 0);
   }
 }
 
-function constructLid(slope, numLevels) {
-  if (numLevels === 0) {
+function constructLid(slope, numLevels, diagonal = false) {
+  if (slope === 0 && numLevels === 0) {
+    return [
+      [0, 0, 0],
+      [1, 0, 0],
+      [1, 1, 0],
+      [0, 1, 0],
+    ];
+  }
+
+  if (numLevels === 0 && diagonal !== false) {
     return [
       [0, 0, 0],
       [1, 0, 0],
