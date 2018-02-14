@@ -15,9 +15,6 @@ let config = {
   },
 
   plugins: [
-    new webpack.ProvidePlugin({
-      'window.decomp': 'poly-decomp' // matterjs
-    }),
     new webpack.DefinePlugin({
       'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
       'process.env.DEBUG': JSON.stringify(process.env.DEBUG)
