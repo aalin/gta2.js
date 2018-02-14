@@ -1,7 +1,6 @@
 import GameState from './game_state';
 import LoadingScreen from './loading_screen';
 import Shader from './shader';
-import BlobStore from './blob_store';
 import GTA2Style from './gta2_style';
 import GTA2Map from './gta2_map';
 import Camera from './camera';
@@ -43,9 +42,8 @@ class Gameplay extends GameState {
       )
     ));
 
-    this.addDependency('blobStore', () => BlobStore.load('data'));
-
     this.addDependency('style', () => GTA2Style.load(this.gl, `${LEVEL_BASE_URI}/${level}.sty`));
+
     this.addDependency('map', () => (
       GTA2Map.load(
         this.gl,

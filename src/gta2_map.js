@@ -4,7 +4,6 @@ import { packIntLE } from './binary_buffer';
 import { vec2, vec3, mat2d } from 'gl-matrix';
 import BinaryBuffer, { StructReader } from './binary_buffer';
 import Model from './model';
-import IteratorGenerator from './iterator_generator';
 
 const MAP_SIZE = 256;
 const INT_SIZE = 4;
@@ -26,7 +25,7 @@ const BlockInfo = new StructReader({
   slopeType: "8LE"
 });
 
-function fixedPoint(x) {
+function fixedPointToFloat(x) {
   return (((x & 0xff80) >> 7) >>> 0) % 256 + (x & 0x7f) / 128.0;
 }
 
@@ -458,10 +457,10 @@ function* parseMap(data) {
       case 'LGHT':
         const lightSize = 16;
         const lights = buffer.readStructs(size / lightSize, Light).map((light) => {
-          light.x = fixedPoint(light.x);
-          light.y = fixedPoint(light.y);
-          light.z = fixedPoint(light.z);
-          light.radius = fixedPoint(light.radius);
+          light.x = fixedPointToFloat(light.x);
+          light.y = fixedPointToFloat(light.y);
+          light.z = fixedPointToFloat(light.z);
+          light.radius = fixedPointToFloat(light.radius);
           return light;
         });
         console.log(lights);
@@ -473,44 +472,12 @@ function* parseMap(data) {
   }
 }
 
-let ID = 0;
-let lastOffset = 0;
-
 function flatten(a) {
   if (a instanceof Array) {
     return a.reduce((acc, e) => acc.concat(flatten(e)), []);
   }
 
   return a;
-}
-
-class ArrayWriter {
-  constructor(array) {
-    this._array = array;
-    this._index = 0;
-  }
-
-  get pos() {
-    return this._index;
-  }
-
-  get eof() {
-    return this._index >= this._array.length;
-  }
-
-  reset() {
-    this._index = 0;
-  }
-
-  write(data) {
-    for (let i = 0; i < data.length; i++) {
-      this._array[this._index++] = data[i];
-    }
-  }
-
-  get array() {
-    return new this._array.constructor(this._array.slice(0, this._index));
-  }
 }
 
 function* loadVertexes(parts) {

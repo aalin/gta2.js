@@ -44,8 +44,6 @@ class Player {
   }
 
   _move(amount) {
-    console.log("Moving", amount.toFixed(2));
-
     vec3.add(this.position, this.position, [
       Math.cos(this.direction * Math.PI) * amount,
       Math.sin(this.direction * Math.PI) * amount,

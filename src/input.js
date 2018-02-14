@@ -18,7 +18,7 @@ class Input {
 
     window.addEventListener('keydown', (e) => {
       e.preventDefault();
-      console.log('Pressed', e.keyCode);
+      // console.log('Pressed', e.keyCode);
       this.keys.add(e.keyCode);
     });
 

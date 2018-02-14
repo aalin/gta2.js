@@ -4,8 +4,7 @@ First, make sure you have the [current version of nodejs](https://nodejs.org/en/
 
 Download the levels:
 
-    cd levels
-    wget http://gtamp.com/mapscript/_singleplayer/04_gta2files/extras/singleplayer/data/{wil,bil,ste}.{sty,gmp}
+    wget -P levels http://gtamp.com/mapscript/_singleplayer/04_gta2files/extras/singleplayer/data/{wil,bil,ste}.{sty,gmp}
 
 To install dependencies:
 
